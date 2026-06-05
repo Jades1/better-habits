@@ -16,6 +16,7 @@ install, no account, no server. Your data stays on your machine.
 - Stats: today %, best streak, last-30-days %, avg check-in time, 30-day chart
 - Export / Import backup (your data lives in browser localStorage)
 - **Installable on your phone** (PWA, works offline) — see `DEPLOY.md`
+- **Shut your Mac down from the app** + nightly auto-shutdown (via `helper/`)
 - Optional macOS "wind-down" nudge + auto-shutdown (see `nudge/`)
 
 ## Project layout
@@ -28,6 +29,7 @@ icons/          App icons
 TUTORIAL.md     Feature walkthrough for users
 DEPLOY.md       How to host it + install on your phone
 HANDOFF.md      Reusable summary for continuing development
+helper/         Desktop helper: shut the Mac down from the app (local, sudo-free)
 nudge/          macOS wind-down notification system
 ```
 
@@ -43,6 +45,14 @@ open index.html
 
 ## Changelog
 All notable changes are tracked here, newest first.
+
+### v0.5 — 2026-06-05
+- **Added** "Wind-down · this Mac" card — shut the Mac down from the app and set a
+  nightly auto-shutdown time, all sudo-free. Powered by a small local **desktop
+  helper** (`helper/`) since a browser tab can't power off a computer on its own.
+  The helper is local-only (`127.0.0.1`), token-protected, and CORS-locked so no
+  random website can trigger it. Controls appear only on the Mac running the helper.
+- **Added** `helper/` (Python helper, launch agent, `install.sh`, README)
 
 ### v0.4 — 2026-06-05
 - **Added** cross-device sync via Supabase — set the same **sync code** on each

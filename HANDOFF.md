@@ -55,7 +55,7 @@ nudge + auto-shutdown to support that goal directly.
   per-device code stored under `betterHabits.syncCode`. Different codes = fully
   separate data (handy for sharing the app with a tester).
 
-## Current state (v0.4)
+## Current state (v0.5)
 Working features:
 - Add / edit / delete habits
 - Daily check-off + date navigation (‹ ›); records check-off time per day
@@ -63,11 +63,39 @@ Working features:
 - Per-habit expandable 28-day history grid (click to toggle; tooltip shows time)
 - Stats card: today %, best streak, last-30-days %, **avg check-in time**, 30-day chart
 - **Cross-device sync** via a private sync code (see "Cross-device sync" above)
+- **Shut down this Mac from the app** + nightly auto-shutdown (see "Wind-down" below)
 - Export / Import JSON backup
 - Installable PWA (offline-capable) — see `DEPLOY.md` for hosting
 - macOS nudge system in `nudge/` (10:15pm notification)
 
+## Wind-down: shut down the Mac from the app (v0.5)
+- **Why a helper:** a browser tab can't power off a computer (sandbox), so the
+  "Wind-down · this Mac" card talks to a tiny local helper over `http://127.0.0.1:7421`.
+- **Helper:** `helper/habits-helper.py` (Python stdlib only). Endpoints:
+  `GET /status`, `POST /shutdown` (`?dry=1` = token check), `POST /schedule`
+  `{hour,minute}`, `POST /unschedule`. Shutdown is graceful (`osascript` →
+  System Events), so **no sudo**. Scheduling writes a per-user launch agent
+  `com.betterhabits.autoshutdown` (also sudo-free). The helper ALSO serves the
+  app's static files, so `http://localhost:7421` gives the full app + controls.
+- **Security (3 layers):** binds to `127.0.0.1` only; `/shutdown`+`/schedule`
+  require the `X-Habits-Token` secret (in `~/.better-habits-helper-token`);
+  CORS allowlist + Origin check (custom header forces a preflight we reject for
+  unknown origins). Verified: wrong token → 401, `evil.com` preflight blocked.
+- **Install location matters:** installed to `~/Library/Application Support/BetterHabits`,
+  NOT `~/Documents` — macOS TCC blocks launchd processes from reading `~/Documents`
+  ("Operation not permitted"). `helper/install.sh` copies the helper + web assets
+  there and loads `helper/com.betterhabits.helper.plist` (RunAtLoad + KeepAlive).
+  Re-run `install.sh` after changing the app to refresh the local served copy.
+- **App side (index.html):** `HELPER_URL` = same-origin when served on :7421, else
+  `http://127.0.0.1:7421`. Card auto-shows only when the helper is reachable (so
+  phones don't see a dead card). Token paired via a `prompt()`, stored under
+  `betterHabits.helper` (device-local, NOT synced). Token is verified with a
+  `/shutdown?dry=1` call. Mixed-content note: an HTTPS page (github.io) calling
+  `http://127.0.0.1` works in Chrome (localhost is "potentially trustworthy"); if
+  a browser blocks it, open `http://localhost:7421` (served by the helper) instead.
+
 ## Recent changes
+- v0.5: shut-down-from-app via local helper (`helper/`), Wind-down card
 - v0.4: cross-device sync (Supabase REST + merge/tombstones), footer sync button
 - v0.3: timestamp check-offs + avg check-in stat; PWA (manifest/SW/icons);
   vendored Chart.js; phone install + deploy docs

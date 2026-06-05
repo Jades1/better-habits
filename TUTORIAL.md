@@ -99,6 +99,35 @@ How it behaves:
 
 ---
 
+## 12. Shutting your Mac down from the app
+The **Wind-down · this Mac** card lets you power this Mac off from the app — both
+a **⏻ Shut down now** button and a **nightly auto-shutdown** time.
+
+A browser can't turn off a computer by itself, so this uses a tiny **desktop
+helper** that runs in the background on your Mac. One-time setup:
+
+1. In Terminal, run:
+   ```bash
+   bash "/Users/jamesades/Documents/Claude/Projects/Better_habits/helper/install.sh"
+   ```
+   It prints a **pairing token** and starts the helper.
+2. Open the app **on that Mac**. The **Wind-down · this Mac** card appears.
+3. Click **Connect helper** and paste the token.
+4. Now you can:
+   - **⏻ Shut down now** — graceful shutdown (apps can prompt to save first).
+   - **Auto shut-down at [time] → Save** — e.g. set `22:30` for a nightly 10:30 PM
+     shutdown. **Turn off** removes it.
+
+Notes:
+- The card only appears on the **Mac the helper is installed on** — your phone
+  can't shut the laptop down (different machine).
+- It's safe: the helper only listens on your own machine, requires the secret
+  token, and rejects other websites.
+- Tip: on that Mac you can also just open **http://localhost:7421** to get the
+  app with the controls already wired up. Full details in `helper/README.md`.
+
+---
+
 ## The nightly wind-down system (macOS)
 Separate from the app, there are two nudges that help with late-night screens:
 1. A **10:15pm notification** ("wind down — screens off soon") — see `nudge/README.md`.

@@ -128,6 +128,11 @@
   .date-nav { display: flex; align-items: center; gap: 12px; }
   .date-nav button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; }
   .date-nav .label { flex: 1; text-align: center; font-size: 14px; color: var(--muted); }
+  .wd-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .wd-row label { font-size: 13px; color: var(--muted); }
+  #wdTime { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+  #wdTime:focus { border-color: var(--accent); outline: none; }
+  #wdShutNow { background: var(--warn); }
 </style>
 </head>
 <body>
@@ -159,6 +164,29 @@
       <div class="stat"><div class="num" id="statAvg">—</div><div class="lbl">Avg check-in</div></div>
     </div>
     <canvas id="chart" height="140"></canvas>
+  </div>
+
+  <div class="card" id="windDownCard" style="display:none">
+    <h2>Wind-down · this Mac</h2>
+    <div id="wdSetup">
+      <div class="empty" id="wdSetupMsg" style="text-align:left">
+        Shut this Mac down from the app. Needs the free desktop helper running on
+        this machine — see <code>helper/README.md</code>.
+        <div style="margin-top:10px"><button class="ghost" id="wdConnect">Connect helper</button></div>
+      </div>
+    </div>
+    <div id="wdControls" style="display:none">
+      <div class="wd-row" style="margin-bottom:14px">
+        <button class="primary" id="wdShutNow">⏻ Shut down now</button>
+      </div>
+      <div class="wd-row">
+        <label>Auto shut-down at</label>
+        <input type="time" id="wdTime" value="22:30" />
+        <button class="primary" id="wdSave">Save</button>
+        <button class="ghost" id="wdOff">Turn off</button>
+      </div>
+      <div class="grid-caption" id="wdSchedStatus" style="margin-top:10px"></div>
+    </div>
   </div>
 
   <div class="footer">
@@ -625,9 +653,106 @@ document.getElementById("syncBtn").onclick = () => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && syncCode) pullRemote().catch(() => {}); });
 window.addEventListener("focus", () => { if (syncCode) pullRemote().catch(() => {}); });
 
+/* ─────────────────────── Wind-down: shut this Mac down ───────────────────────
+   A browser tab can't power off a computer, so this talks to a small local
+   helper (see helper/README.md) over http://localhost:7421. Controls only light
+   up when that helper is reachable — i.e. on the Mac it's installed on. */
+const HELPER_KEY = "betterHabits.helper";
+// when the app is served *by* the helper, talk to it same-origin; else localhost
+const HELPER_URL = (location.port === "7421") ? location.origin : "http://127.0.0.1:7421";
+
+function helperCfg() { try { return JSON.parse(localStorage.getItem(HELPER_KEY)) || {}; } catch { return {}; } }
+function saveHelperCfg(c) { localStorage.setItem(HELPER_KEY, JSON.stringify(c)); }
+
+async function helperStatus() {
+  const r = await fetch(HELPER_URL + "/status", { cache: "no-store" });
+  if (!r.ok) throw new Error("status " + r.status);
+  return r.json();
+}
+function helperPost(path, body, dry) {
+  return fetch(HELPER_URL + path + (dry ? "?dry=1" : ""), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Habits-Token": helperCfg().token || "" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+
+function to12(h, m) { const d = new Date(); d.setHours(h, m, 0, 0); return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+
+function renderSchedule(s) {
+  const el = document.getElementById("wdSchedStatus");
+  if (s && s.enabled) {
+    document.getElementById("wdTime").value =
+      String(s.hour).padStart(2, "0") + ":" + String(s.minute).padStart(2, "0");
+    el.textContent = "Auto shut-down is ON — every day at " + to12(s.hour, s.minute) + ".";
+    el.style.color = "var(--good)";
+  } else {
+    el.textContent = "Auto shut-down is off.";
+    el.style.color = "";
+  }
+}
+
+async function refreshWindDown() {
+  const card = document.getElementById("windDownCard");
+  const setup = document.getElementById("wdSetup");
+  const controls = document.getElementById("wdControls");
+  let st;
+  try { st = await helperStatus(); }
+  catch {
+    // not reachable: show the card only if this device was set up before
+    if (helperCfg().token) {
+      card.style.display = ""; setup.style.display = ""; controls.style.display = "none";
+      document.getElementById("wdSetupMsg").innerHTML =
+        "Desktop helper isn't running. Start it (see <code>helper/README.md</code>) and reload this page.";
+    } else { card.style.display = "none"; }
+    return;
+  }
+  card.style.display = "";
+  if (!helperCfg().token) { setup.style.display = ""; controls.style.display = "none"; return; }
+  const v = await helperPost("/shutdown", null, true).catch(() => null);  // dry call verifies token
+  if (!v || v.status === 401) {
+    setup.style.display = ""; controls.style.display = "none";
+    document.getElementById("wdSetupMsg").innerHTML =
+      "Saved token was rejected. <button class='ghost' id='wdConnect2'>Re-enter token</button>";
+    const b = document.getElementById("wdConnect2"); if (b) b.onclick = connectHelper;
+    return;
+  }
+  setup.style.display = "none"; controls.style.display = "";
+  renderSchedule(st.schedule);
+}
+
+async function connectHelper() {
+  const t = prompt("Paste the helper pairing token.\n(Shown when you ran helper/install.sh, or in the file ~/.better-habits-helper-token)");
+  if (t === null) return;
+  saveHelperCfg(Object.assign(helperCfg(), { token: t.trim() }));
+  const v = await helperPost("/shutdown", null, true).catch(() => null);
+  if (!v || v.status !== 200) { alert("That token didn't work — double-check it and try again."); return; }
+  refreshWindDown();
+}
+
+document.getElementById("wdConnect").onclick = connectHelper;
+document.getElementById("wdShutNow").onclick = async () => {
+  if (!confirm("Shut down this Mac now? Save any open work first.")) return;
+  const r = await helperPost("/shutdown").catch(() => null);
+  if (!r || !r.ok) alert("Couldn't reach the helper to shut down.");
+};
+document.getElementById("wdSave").onclick = async () => {
+  const [h, m] = document.getElementById("wdTime").value.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return alert("Pick a valid time first.");
+  const r = await helperPost("/schedule", { hour: h, minute: m }).catch(() => null);
+  if (r && r.ok) renderSchedule((await r.json()).schedule);
+  else alert("Couldn't save the schedule.");
+};
+document.getElementById("wdOff").onclick = async () => {
+  const r = await helperPost("/unschedule").catch(() => null);
+  if (r && r.ok) renderSchedule((await r.json()).schedule);
+  else alert("Couldn't turn off the schedule.");
+};
+
 render();
 updateSyncBtn();
 startSync();
+refreshWindDown();
 
 // register service worker for offline / installable app (no-op on file://)
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
