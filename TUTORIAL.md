@@ -73,7 +73,36 @@ By default each device keeps its own habit log. To link them, set up sync below.
 
 ---
 
-## 11. Syncing across your devices
+## 11. Reminders (gentle nudges)
+The **Reminders** card lets you set little nudges with your own message — a
+compassion prompt ("Be kind to yourself"), a posture check, a water reminder,
+whatever you like.
+
+**Add one:** tap **＋ Add reminder**, type the message, then choose either:
+- **Repeat every…** — fires on an interval (e.g. every `30` minutes, or every `2`
+  hours), or
+- **At a time…** — fires once a day at a clock time (e.g. `15:00`).
+
+Tap **Save**. When a reminder is due, a **banner slides in at the top** and a
+**soft chime** plays.
+
+**Managing reminders:**
+- **Tap** a reminder to turn it **on/off** (the switch slides green when on).
+- **Press and hold** a reminder to **edit** it — like rearranging apps on an
+  iPhone. Change the message, timing, or delete it.
+- Tap the **×** to delete.
+
+Good to know:
+- Reminders **chime while the app is open**. A web app can't reliably alert you
+  when it's fully closed (especially on iPhone), so keep it open (or on screen)
+  for the nudge — or use a time-of-day reminder for around when you'll be in it.
+- The **first tap anywhere** in the app unlocks sound (a browser rule), so the
+  chime works from then on.
+- Reminders **sync across your devices** if you've set the same sync code.
+
+---
+
+## 12. Syncing across your devices
 The **⇅ Sync** button (footer) keeps your phone and laptop in sync.
 
 1. On the first device, tap **⇅ Sync** and type a **sync code** — any secret
@@ -99,7 +128,7 @@ How it behaves:
 
 ---
 
-## 12. Shutting your Mac down from the app
+## 13. Shutting your Mac down from the app
 The **Wind-down · this Mac** card lets you power this Mac off from the app — both
 a **⏻ Shut down now** button and a **nightly auto-shutdown** time.
 

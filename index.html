@@ -133,6 +133,40 @@
   #wdTime { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 14px; }
   #wdTime:focus { border-color: var(--accent); outline: none; }
   #wdShutNow { background: var(--warn); }
+
+  /* Reminders */
+  .rem { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: var(--panel-2); margin-bottom: 8px; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .rem:last-child { margin-bottom: 0; }
+  .rem.off { opacity: 0.5; }
+  .rem-toggle { width: 42px; height: 26px; border-radius: 13px; background: var(--line); flex-shrink: 0; position: relative; transition: background 0.15s; }
+  .rem.on .rem-toggle { background: var(--good); }
+  .rem-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+  .rem.on .rem-toggle::after { transform: translateX(16px); }
+  .rem-body { flex: 1; min-width: 0; }
+  .rem-msg { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rem-when { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .rtoast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); max-width: 90vw; animation: rtIn 0.25s ease; }
+  @keyframes rtIn { from { opacity: 0; transform: translate(-50%,-12px); } to { opacity: 1; transform: translate(-50%,0); } }
+  .rtoast-icon { font-size: 20px; }
+  .rtoast-msg { font-size: 15px; }
+  .rtoast-close { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 4px; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 60; display: grid; place-items: center; padding: 20px; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: 100%; max-width: 380px; }
+  .modal h3 { margin: 0 0 14px; font-size: 18px; }
+  .fld { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .fld input[type=text] { width: 100%; margin-top: 6px; }
+  .fld-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .fld-row label { font-size: 13px; color: var(--muted); }
+  .fld-row input[type=number] { width: 80px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 15px; }
+  .fld-row input[type=time] { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 9px 12px; border-radius: 10px; font-size: 15px; }
+  .fld-row select { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 10px; border-radius: 10px; font-size: 15px; }
+  .seg { display: flex; gap: 8px; margin-bottom: 12px; }
+  .seg-btn { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); padding: 9px; border-radius: 10px; font-size: 13px; cursor: pointer; }
+  .seg-btn.active { border-color: var(--accent); color: var(--text); }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 16px; color: var(--text); }
+  .modal-actions { display: flex; align-items: center; gap: 8px; }
 </style>
 </head>
 <body>
@@ -166,6 +200,17 @@
     <canvas id="chart" height="140"></canvas>
   </div>
 
+  <div class="card" id="remindersCard">
+    <h2>Reminders</h2>
+    <div id="reminderList"></div>
+    <div class="add-row">
+      <button class="primary" id="addReminderBtn" style="flex:1">＋ Add reminder</button>
+    </div>
+    <div class="grid-caption" style="margin-top:10px">
+      Tap to turn on/off · press &amp; hold to edit. Reminders chime while the app is open.
+    </div>
+  </div>
+
   <div class="card" id="windDownCard" style="display:none">
     <h2>Wind-down · this Mac</h2>
     <div id="wdSetup">
@@ -197,6 +242,44 @@
   </div>
 </main>
 
+<div id="reminderToast" class="rtoast" style="display:none">
+  <span class="rtoast-icon">🌿</span>
+  <span class="rtoast-msg" id="reminderToastMsg"></span>
+  <button class="rtoast-close" id="reminderToastClose" title="Dismiss">✕</button>
+</div>
+
+<div id="remEditOverlay" class="overlay" style="display:none">
+  <div class="modal">
+    <h3 id="remEditTitle">Reminder</h3>
+    <label class="fld">Message
+      <input type="text" id="remMsg" placeholder="e.g. Be kind to yourself" maxlength="120" />
+    </label>
+    <div class="seg" id="remTypeSeg">
+      <button type="button" class="seg-btn" data-type="interval">Repeat every…</button>
+      <button type="button" class="seg-btn" data-type="time">At a time…</button>
+    </div>
+    <div class="fld-row" id="remIntervalRow">
+      <label>Every</label>
+      <input type="number" id="remEvery" min="1" value="30" />
+      <select id="remUnit">
+        <option value="min">minutes</option>
+        <option value="hour">hours</option>
+      </select>
+    </div>
+    <div class="fld-row" id="remTimeRow" style="display:none">
+      <label>At</label>
+      <input type="time" id="remAt" value="15:00" />
+    </div>
+    <label class="chk"><input type="checkbox" id="remEnabled" checked /> Enabled</label>
+    <div class="modal-actions">
+      <button class="ghost" id="remDelete" style="display:none">Delete</button>
+      <span style="flex:1"></span>
+      <button class="ghost" id="remCancel">Cancel</button>
+      <button class="primary" id="remSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORE_KEY = "betterHabits.v1";
 let state = load();
@@ -207,9 +290,11 @@ function normalize(s) {
   s = s || {};
   return {
     habits: Array.isArray(s.habits) ? s.habits : [],
+    reminders: Array.isArray(s.reminders) ? s.reminders : [],   // gentle nudges (interval or time-of-day)
     tombstones: {
-      habits: (s.tombstones && s.tombstones.habits) || {},  // habitId -> deletion ms
-      logs:   (s.tombstones && s.tombstones.logs)   || {}    // "habitId|date" -> uncheck ms
+      habits:    (s.tombstones && s.tombstones.habits)    || {},  // habitId -> deletion ms
+      logs:      (s.tombstones && s.tombstones.logs)      || {},  // "habitId|date" -> uncheck ms
+      reminders: (s.tombstones && s.tombstones.reminders) || {}   // reminderId -> deletion ms
     }
   };
 }
@@ -322,6 +407,7 @@ function bestStreakAll() {
 }
 
 function render() {
+  renderReminders();
   document.getElementById("dateLabel").textContent = prettyDate(viewDate);
   const list = document.getElementById("habitList");
   list.innerHTML = "";
@@ -525,6 +611,10 @@ function orderHabits(hs) {
   return hs.slice().sort((a, b) =>
     (a.created || 0) - (b.created || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
+function orderReminders(rs) {
+  return rs.slice().sort((a, b) =>
+    (a.created || 0) - (b.created || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 // canonical string form, used to detect "did anything actually change?"
 function canon(s) {
   const n = normalize(s);
@@ -533,6 +623,7 @@ function canon(s) {
       ? Object.keys(v).sort().reduce((o, k) => (o[k] = sortDeep(v[k]), o), {})
       : v;
   n.habits = orderHabits(n.habits);
+  n.reminders = orderReminders(n.reminders);
   return JSON.stringify(sortDeep(n));
 }
 
@@ -540,12 +631,14 @@ function canon(s) {
 function mergeState(a, b) {
   a = normalize(a); b = normalize(b);
   const out = normalize(null);
-  const habTomb = out.tombstones.habits, logTomb = out.tombstones.logs;
+  const habTomb = out.tombstones.habits, logTomb = out.tombstones.logs, remTomb = out.tombstones.reminders;
   for (const src of [a, b]) {
     for (const [id, ts] of Object.entries(src.tombstones.habits))
       habTomb[id] = Math.max(habTomb[id] || 0, tsMs(ts));
     for (const [k, ts] of Object.entries(src.tombstones.logs))
       logTomb[k] = Math.max(logTomb[k] || 0, tsMs(ts));
+    for (const [id, ts] of Object.entries(src.tombstones.reminders))
+      remTomb[id] = Math.max(remTomb[id] || 0, tsMs(ts));
   }
   const byId = {}, order = [];
   for (const src of [a, b]) {
@@ -567,6 +660,19 @@ function mergeState(a, b) {
     out.habits.push(h);
   }
   out.habits = orderHabits(out.habits);
+
+  // reminders: union by id; the copy with the later updatedTs wins; deleted ones stay dropped
+  const rById = {}, rOrder = [];
+  for (const src of [a, b]) {
+    for (const r of src.reminders) {
+      const ex = rById[r.id];
+      if (!ex) { rById[r.id] = Object.assign({}, r); rOrder.push(r.id); }
+      else if ((r.updatedTs || 0) > (ex.updatedTs || 0)) rById[r.id] = Object.assign({}, r);
+      rById[r.id].created = Math.min(rById[r.id].created || Infinity, r.created || Infinity) || 0;
+    }
+  }
+  for (const id of rOrder) { if (remTomb[id]) continue; out.reminders.push(rById[id]); }
+  out.reminders = orderReminders(out.reminders);
   return out;
 }
 
@@ -749,10 +855,241 @@ document.getElementById("wdOff").onclick = async () => {
   else alert("Couldn't turn off the schedule.");
 };
 
+/* ───────────────────────────── Reminders ─────────────────────────────
+   Gentle nudges. Each reminder is either "every N minutes" (interval) or
+   "at HH:MM" (time of day), with a custom message. They sync across devices
+   (merged like habits). When due, we show an in-app banner + a soft chime —
+   this fires while the app is open (a web app can't reliably notify when
+   fully closed, especially on iOS). Firing state is kept device-local so
+   one device chiming doesn't suppress another. Tap a row to toggle on/off,
+   press & hold to edit. */
+const RT_KEY = "betterHabits.reminderRuntime";
+let reminderRuntime = loadRuntime();   // { [id]: { nextFire: ms } | { lastDate: "YYYY-MM-DD" } }
+function loadRuntime() { try { return JSON.parse(localStorage.getItem(RT_KEY)) || {}; } catch { return {}; } }
+function saveRuntime() { localStorage.setItem(RT_KEY, JSON.stringify(reminderRuntime)); }
+
+function addReminder(patch) {
+  const now = Date.now();
+  state.reminders.push(Object.assign(
+    { id: uid(), message: "", type: "interval", intervalMin: 30, time: "15:00", enabled: true, created: now },
+    patch, { updatedTs: now }));
+  save(); render();
+}
+function updateReminder(id, patch) {
+  const r = state.reminders.find(x => x.id === id);
+  if (!r) return;
+  Object.assign(r, patch, { updatedTs: Date.now() });
+  save(); render();
+}
+function deleteReminder(id) {
+  state.reminders = state.reminders.filter(r => r.id !== id);
+  state.tombstones.reminders[id] = Date.now();   // tombstone so the delete syncs
+  delete reminderRuntime[id]; saveRuntime();
+  save(); render();
+}
+function toggleReminder(id) {
+  const r = state.reminders.find(x => x.id === id);
+  if (!r) return;
+  updateReminder(id, { enabled: !r.enabled });
+  if (r.enabled && r.type === "interval") armInterval(r);   // re-anchor countdown from now
+}
+// (re)start an interval reminder's countdown from now
+function armInterval(r) {
+  reminderRuntime[r.id] = { nextFire: Date.now() + r.intervalMin * 60000 };
+  saveRuntime();
+}
+
+function reminderWhen(r) {
+  if (r.type === "interval") {
+    const n = r.intervalMin;
+    if (n % 60 === 0 && n >= 60) { const h = n / 60; return "Every " + h + " hour" + (h > 1 ? "s" : ""); }
+    return "Every " + n + " min";
+  }
+  const [h, m] = (r.time || "").split(":").map(Number);
+  return (isNaN(h) || isNaN(m)) ? "At —" : "At " + to12(h, m);
+}
+
+function renderReminders() {
+  const list = document.getElementById("reminderList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.reminders.length) {
+    list.innerHTML = '<div class="empty">No reminders yet. Add one for a gentle nudge.</div>';
+    return;
+  }
+  for (const r of orderReminders(state.reminders)) {
+    const row = document.createElement("div");
+    row.className = "rem" + (r.enabled ? " on" : " off");
+    row.dataset.id = r.id;
+    row.innerHTML =
+      '<div class="rem-toggle"></div>' +
+      '<div class="rem-body"><div class="rem-msg"></div><div class="rem-when"></div></div>' +
+      '<button class="del" data-act="del" title="Delete">×</button>';
+    row.querySelector(".rem-msg").textContent = r.message || "(no message)";
+    row.querySelector(".rem-when").textContent = reminderWhen(r) + (r.enabled ? "" : " · off");
+    list.appendChild(row);
+  }
+}
+
+// ── firing: ticker + banner + chime ──
+let toastTimer = null;
+function fireReminder(r) {
+  const toast = document.getElementById("reminderToast");
+  document.getElementById("reminderToastMsg").textContent = r.message;
+  toast.style.display = "";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.style.display = "none"; }, 12000);
+  chime();
+  if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
+}
+
+let audioCtx = null;
+function chime() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const now = audioCtx.currentTime;
+    [880, 1108.73].forEach((f, i) => {                 // soft two-note (A5 → C#6)
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      o.connect(g); g.connect(audioCtx.destination);
+      const t = now + i * 0.18;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.start(t); o.stop(t + 0.55);
+    });
+  } catch {}
+}
+// browsers require a user gesture before audio can play (esp. iOS) — unlock on first tap
+document.addEventListener("pointerdown", function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch {}
+}, { once: true });
+
+function reminderTick() {
+  const now = Date.now();
+  const today = todayStr();
+  for (const r of state.reminders) {
+    if (!r.enabled || !r.message) continue;
+    if (r.type === "interval") {
+      const rt = reminderRuntime[r.id];
+      if (!rt || !rt.nextFire) { armInterval(r); continue; }   // first time we see it: start the clock
+      if (now >= rt.nextFire) {
+        fireReminder(r);
+        reminderRuntime[r.id] = { nextFire: now + r.intervalMin * 60000 };  // next slot from now (no burst catch-up)
+        saveRuntime();
+      }
+    } else {
+      const [h, m] = (r.time || "").split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) continue;
+      const target = new Date(); target.setHours(h, m, 0, 0);
+      const rt = reminderRuntime[r.id] || (reminderRuntime[r.id] = {});
+      // fire once per day, only if we're within 5 min after the target (avoids stale fire when opening hours later)
+      if (rt.lastDate !== today && now >= target.getTime() && (now - target.getTime()) < 5 * 60000) {
+        fireReminder(r);
+        rt.lastDate = today; saveRuntime();
+      }
+    }
+  }
+}
+
+// ── editor modal ──
+let editingId = null;
+function setRemType(t) {
+  document.querySelectorAll("#remTypeSeg .seg-btn").forEach(b => b.classList.toggle("active", b.dataset.type === t));
+  document.getElementById("remIntervalRow").style.display = t === "interval" ? "" : "none";
+  document.getElementById("remTimeRow").style.display = t === "time" ? "" : "none";
+}
+function openReminderEditor(id) {
+  editingId = id || null;
+  const r = id ? state.reminders.find(x => x.id === id) : null;
+  document.getElementById("remEditTitle").textContent = id ? "Edit reminder" : "New reminder";
+  document.getElementById("remMsg").value = r ? r.message : "";
+  const type = r ? r.type : "interval";
+  setRemType(type);
+  const asHours = r && r.type === "interval" && r.intervalMin % 60 === 0 && r.intervalMin >= 60;
+  document.getElementById("remEvery").value = r && r.type === "interval" ? (asHours ? r.intervalMin / 60 : r.intervalMin) : 30;
+  document.getElementById("remUnit").value = asHours ? "hour" : "min";
+  document.getElementById("remAt").value = r && r.type === "time" ? r.time : "15:00";
+  document.getElementById("remEnabled").checked = r ? r.enabled : true;
+  document.getElementById("remDelete").style.display = id ? "" : "none";
+  document.getElementById("remEditOverlay").style.display = "";
+  setTimeout(() => document.getElementById("remMsg").focus(), 50);
+}
+function closeReminderEditor() { document.getElementById("remEditOverlay").style.display = "none"; editingId = null; }
+
+document.querySelectorAll("#remTypeSeg .seg-btn").forEach(b => b.onclick = () => setRemType(b.dataset.type));
+document.getElementById("addReminderBtn").onclick = () => openReminderEditor(null);
+document.getElementById("remCancel").onclick = closeReminderEditor;
+document.getElementById("remEditOverlay").onclick = e => { if (e.target.id === "remEditOverlay") closeReminderEditor(); };
+document.getElementById("remDelete").onclick = () => { if (editingId && confirm("Delete this reminder?")) { deleteReminder(editingId); closeReminderEditor(); } };
+document.getElementById("remSave").onclick = () => {
+  const msg = document.getElementById("remMsg").value.trim();
+  if (!msg) { alert("Type a message for the reminder."); return; }
+  const type = document.querySelector("#remTypeSeg .seg-btn.active").dataset.type;
+  const enabled = document.getElementById("remEnabled").checked;
+  const patch = { message: msg, type, enabled };
+  if (type === "interval") {
+    let n = parseInt(document.getElementById("remEvery").value, 10);
+    if (isNaN(n) || n < 1) { alert("Enter how often (a whole number ≥ 1)."); return; }
+    if (document.getElementById("remUnit").value === "hour") n *= 60;
+    patch.intervalMin = n;
+  } else {
+    const t = document.getElementById("remAt").value;
+    if (!t) { alert("Pick a time of day."); return; }
+    patch.time = t;
+  }
+  if (editingId) {
+    updateReminder(editingId, patch);
+    const r = state.reminders.find(x => x.id === editingId);
+    if (r && r.type === "interval" && r.enabled) armInterval(r);   // apply new interval from now
+    else if (r && r.type === "time") { delete reminderRuntime[r.id]; saveRuntime(); }  // allow today's fire again
+  } else {
+    addReminder(patch);
+  }
+  closeReminderEditor();
+};
+document.getElementById("reminderToastClose").onclick = () => { document.getElementById("reminderToast").style.display = "none"; };
+
+// ── row interaction: tap = toggle, press-and-hold = edit (iPhone-style) ──
+const remListEl = document.getElementById("reminderList");
+let lpTimer = null, lpFired = false, lpX = 0, lpY = 0;
+function cancelLP() { clearTimeout(lpTimer); lpTimer = null; }
+remListEl.addEventListener("pointerdown", e => {
+  const row = e.target.closest(".rem");
+  if (!row || e.target.closest("[data-act=del]")) return;
+  lpFired = false; lpX = e.clientX; lpY = e.clientY;
+  const id = row.dataset.id;
+  lpTimer = setTimeout(() => { lpFired = true; openReminderEditor(id); if (navigator.vibrate) try { navigator.vibrate(15); } catch {} }, 550);
+});
+remListEl.addEventListener("pointermove", e => {
+  if (lpTimer && (Math.abs(e.clientX - lpX) > 10 || Math.abs(e.clientY - lpY) > 10)) cancelLP();  // a scroll, not a hold
+});
+remListEl.addEventListener("pointerup", e => {
+  const row = e.target.closest(".rem");
+  cancelLP();
+  if (row && e.target.closest("[data-act=del]")) {
+    if (confirm("Delete this reminder?")) deleteReminder(row.dataset.id);
+    return;
+  }
+  if (row && !lpFired) toggleReminder(row.dataset.id);
+});
+remListEl.addEventListener("pointercancel", cancelLP);
+remListEl.addEventListener("contextmenu", e => e.preventDefault());   // suppress long-press context menu
+
+setInterval(reminderTick, 15000);
+// catch up promptly when you return to the app
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reminderTick(); });
+window.addEventListener("focus", reminderTick);
+
 render();
 updateSyncBtn();
 startSync();
 refreshWindDown();
+reminderTick();
 
 // register service worker for offline / installable app (no-op on file://)
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

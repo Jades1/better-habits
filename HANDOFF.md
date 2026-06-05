@@ -26,9 +26,12 @@ nudge + auto-shutdown to support that goal directly.
   ```js
   {
     habits: [ { id, name, created, nameTs, log: { "YYYY-MM-DD": "<ISO ts>", ... } } ],
+    reminders: [ { id, message, type:"interval"|"time", intervalMin, time:"HH:MM",
+                   enabled, created, updatedTs } ],   // gentle nudges (v0.6)
     tombstones: {
-      habits: { "<habitId>": <deletion ms> },        // deleted habits
-      logs:   { "<habitId>|YYYY-MM-DD": <uncheck ms> } // un-checked days
+      habits:    { "<habitId>": <deletion ms> },          // deleted habits
+      logs:      { "<habitId>|YYYY-MM-DD": <uncheck ms> }, // un-checked days
+      reminders: { "<reminderId>": <deletion ms> }         // deleted reminders
     }
   }
   ```
@@ -55,7 +58,7 @@ nudge + auto-shutdown to support that goal directly.
   per-device code stored under `betterHabits.syncCode`. Different codes = fully
   separate data (handy for sharing the app with a tester).
 
-## Current state (v0.5)
+## Current state (v0.6)
 Working features:
 - Add / edit / delete habits
 - Daily check-off + date navigation (‹ ›); records check-off time per day
@@ -63,10 +66,36 @@ Working features:
 - Per-habit expandable 28-day history grid (click to toggle; tooltip shows time)
 - Stats card: today %, best streak, last-30-days %, **avg check-in time**, 30-day chart
 - **Cross-device sync** via a private sync code (see "Cross-device sync" above)
+- **Reminders** — interval or time-of-day nudges with custom messages; in-app
+  banner + WebAudio chime; tap to toggle, press-and-hold to edit; synced (v0.6)
 - **Shut down this Mac from the app** + nightly auto-shutdown (see "Wind-down" below)
 - Export / Import JSON backup
 - Installable PWA (offline-capable) — see `DEPLOY.md` for hosting
 - macOS nudge system in `nudge/` (10:15pm notification)
+
+## Reminders (v0.6)
+- **Model:** `state.reminders[]` (see data shape). Two kinds: `type:"interval"`
+  (fires every `intervalMin`) and `type:"time"` (fires daily at `time` "HH:MM").
+  `updatedTs` resolves edit conflicts; deletes are tombstoned in
+  `tombstones.reminders`. Merged in `mergeState()` like habits (union by id,
+  later `updatedTs` wins the whole object, tombstone drops it); ordered by
+  `created`→`id` in `orderReminders()` and included in `canon()`.
+- **Firing is device-local, NOT synced:** runtime lives in localStorage key
+  `betterHabits.reminderRuntime` ({id → {nextFire} | {lastDate}}), so one device
+  chiming doesn't suppress another and constantly-changing timestamps don't cause
+  sync ping-pong. `reminderTick()` runs every 15s (+ on focus/visibility): interval
+  reminders fire when `now ≥ nextFire` then re-arm `now + interval` (no burst
+  catch-up); time reminders fire once/day only within 5 min after the target
+  (avoids a stale fire when you open the app hours later).
+- **Alert:** in-app banner (`#reminderToast`, auto-hides after 12s) + a soft
+  two-note WebAudio chime (no audio asset). Audio is unlocked on first
+  `pointerdown` (browser gesture requirement, esp. iOS). Known limitation:
+  only fires while the app is open — documented for the user.
+- **UI:** `#remindersCard`; rows render in `renderReminders()` (called from
+  `render()` so sync updates redraw them). **Tap** a row = toggle enabled;
+  **press & hold** (550ms, movement >10px cancels) = open the editor modal
+  (`#remEditOverlay`). `×` deletes. Editor handles new + edit, interval-vs-time
+  segmented control, minutes/hours unit.
 
 ## Wind-down: shut down the Mac from the app (v0.5)
 - **Why a helper:** a browser tab can't power off a computer (sandbox), so the
@@ -95,6 +124,7 @@ Working features:
   a browser blocks it, open `http://localhost:7421` (served by the helper) instead.
 
 ## Recent changes
+- v0.6: Reminders (interval / time-of-day nudges, in-app banner + chime, synced)
 - v0.5: shut-down-from-app via local helper (`helper/`), Wind-down card
 - v0.4: cross-device sync (Supabase REST + merge/tombstones), footer sync button
 - v0.3: timestamp check-offs + avg check-in stat; PWA (manifest/SW/icons);
@@ -114,7 +144,6 @@ Working features:
 - Reorder habits (drag and drop)
 - Per-habit color tags
 - Notes per day
-- Reminder times configurable inside the app
 
 ## Conventions
 - Keep `index.html` self-contained; avoid adding build tooling unless necessary.

@@ -6,6 +6,8 @@ install, no account, no server. Your data stays on your machine.
 👉 **New here?** Read [`TUTORIAL.md`](./TUTORIAL.md) for a feature walkthrough.
 
 ## Features
+- **Custom reminders** — gentle nudges on a repeating interval or at a set time,
+  with your own message (e.g. "Be kind to yourself"); chime + banner in-app
 - **Cross-device sync** — link your phone & laptop with a private sync code
 - One-tap daily check-off for each habit
 - Streak counters (🔥) per habit
@@ -45,6 +47,14 @@ open index.html
 
 ## Changelog
 All notable changes are tracked here, newest first.
+
+### v0.6 — 2026-06-05
+- **Added** a **Reminders** card — create gentle nudges that fire on a repeating
+  interval (e.g. every 30 min) or at a specific time of day, each with your own
+  message. When due, the app shows an in-app banner and plays a soft chime.
+  Tap a reminder to turn it on/off; **press & hold** to edit it (iPhone-style).
+  Reminders sync across your devices on the same sync code. They fire while the
+  app is open (a web app can't reliably alert when fully closed, esp. on iOS).
 
 ### v0.5 — 2026-06-05
 - **Added** "Wind-down · this Mac" card — shut the Mac down from the app and set a
