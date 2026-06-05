@@ -68,8 +68,21 @@
   .habit-name.done { color: var(--muted); text-decoration: line-through; }
   .streak { font-size: 13px; color: var(--muted); white-space: nowrap; }
   .streak b { color: var(--accent); }
+  .iconbtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 6px; line-height: 1; }
+  .iconbtn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
   .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 6px; }
   .del:hover { color: var(--warn); background: rgba(255,107,107,0.1); }
+  .name-edit { flex: 1; background: var(--bg); border: 1px solid var(--accent); color: var(--text); padding: 4px 8px; border-radius: 6px; font-size: 16px; outline: none; }
+  .habit-detail { padding: 4px 12px 14px; }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-width: 320px; }
+  .grid .cell { aspect-ratio: 1; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); cursor: pointer; transition: transform 0.08s; }
+  .grid .cell:hover { transform: scale(1.12); }
+  .grid .cell.on { background: var(--good); border-color: var(--good); }
+  .grid .cell.future { opacity: 0.25; cursor: default; }
+  .grid-caption { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .footer { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+  button.ghost { background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); padding: 8px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; }
+  button.ghost:hover { color: var(--text); border-color: var(--accent); }
   .add-row { display: flex; gap: 8px; margin-top: 12px; }
   input[type=text] {
     flex: 1;
@@ -139,6 +152,12 @@
     </div>
     <canvas id="chart" height="140"></canvas>
   </div>
+
+  <div class="footer">
+    <button class="ghost" id="exportBtn">⬇ Export backup</button>
+    <button class="ghost" id="importBtn">⬆ Import backup</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" />
+  </div>
 </main>
 
 <script>
@@ -169,6 +188,8 @@ function prettyDate(str) {
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+const expanded = new Set();   // ids of habits whose history grid is open
+
 function addHabit(name) {
   name = name.trim();
   if (!name) return;
@@ -177,7 +198,14 @@ function addHabit(name) {
 }
 function deleteHabit(id) {
   state.habits = state.habits.filter(h => h.id !== id);
+  expanded.delete(id);
   save(); render();
+}
+function renameHabit(id, name) {
+  const h = state.habits.find(x => x.id === id);
+  name = (name || "").trim();
+  if (h && name) { h.name = name; save(); }
+  render();
 }
 function toggle(id, dateStr) {
   const h = state.habits.find(x => x.id === id);
@@ -217,17 +245,36 @@ function render() {
   for (const h of state.habits) {
     const done = !!h.log[viewDate];
     const streak = currentStreak(h, viewDate);
+    const isOpen = expanded.has(h.id);
     const row = document.createElement("div");
     row.className = "habit";
     row.innerHTML = `
       <div class="check ${done ? "done" : ""}" data-id="${h.id}"></div>
       <div class="habit-name ${done ? "done" : ""}">${escapeHtml(h.name)}</div>
       <div class="streak">${streak > 0 ? `🔥 <b>${streak}</b>` : ""}</div>
+      <button class="iconbtn" data-edit="${h.id}" title="Rename">✎</button>
+      <button class="iconbtn" data-expand="${h.id}" title="History">${isOpen ? "▾" : "▸"}</button>
       <button class="del" data-del="${h.id}" title="Delete">×</button>
     `;
     list.appendChild(row);
+    if (isOpen) list.appendChild(renderDetail(h));
   }
   renderStats();
+}
+
+// 28-day history grid for one habit
+function renderDetail(h) {
+  const wrap = document.createElement("div");
+  wrap.className = "habit-detail";
+  let cells = "";
+  const today = todayStr();
+  for (let i = 27; i >= 0; i--) {
+    const d = shiftDate(today, -i);
+    const on = h.log[d] ? "on" : "";
+    cells += `<div class="cell ${on}" data-cell="${h.id}" data-date="${d}" title="${d}"></div>`;
+  }
+  wrap.innerHTML = `<div class="grid-caption">Last 28 days — click to toggle</div><div class="grid">${cells}</div>`;
+  return wrap;
 }
 
 function renderStats() {
@@ -288,8 +335,71 @@ document.getElementById("nextDay").onclick = () => {
 document.getElementById("habitList").addEventListener("click", e => {
   const check = e.target.closest(".check");
   if (check) return toggle(check.dataset.id, viewDate);
+
+  const cell = e.target.closest(".cell");
+  if (cell && cell.dataset.date <= todayStr()) return toggle(cell.dataset.cell, cell.dataset.date);
+
+  const exp = e.target.closest("[data-expand]");
+  if (exp) {
+    const id = exp.dataset.expand;
+    expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+    return render();
+  }
+
+  const edit = e.target.closest("[data-edit]");
+  if (edit) return startRename(edit.dataset.edit);
+
   const del = e.target.closest(".del");
   if (del && confirm("Delete this habit and its history?")) deleteHabit(del.dataset.del);
+});
+
+// inline rename: swap the name label for an input
+function startRename(id) {
+  const h = state.habits.find(x => x.id === id);
+  if (!h) return;
+  const row = [...document.querySelectorAll(".habit-name")]
+    .find(el => el.previousElementSibling?.dataset.id === id);
+  if (!row) return;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "name-edit";
+  input.value = h.name;
+  row.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => renameHabit(id, input.value);
+  input.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") commit();
+    if (ev.key === "Escape") render();
+  });
+  input.addEventListener("blur", commit);
+}
+
+// export / import backup
+document.getElementById("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `better-habits-backup-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
+document.getElementById("importFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.habits)) throw new Error("Not a Better Habits backup");
+      if (confirm("Replace your current data with this backup?")) {
+        state = data; save(); render();
+      }
+    } catch (err) { alert("Couldn't import: " + err.message); }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
 });
 
 render();

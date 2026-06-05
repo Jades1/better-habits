@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.betterhabits.winddown</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/jamesades/Documents/Claude/Projects/Better_habits/nudge/wind-down.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>22</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+    <key>StandardErrorPath</key>
+    <string>/tmp/betterhabits-winddown.err</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/betterhabits-winddown.out</string>
+</dict>
+</plist>

@@ -5,7 +5,11 @@
       "Bash(open \"/Users/jamesades/Documents/Claude/Projects/Better_habits/index.html\")",
       "Bash(printf '%s\\\\n' '# Better Habits' '' 'A simple daily habit tracker. Open `index.html` in any browser — no install needed.' '' '## Features' '- Track daily habits with one-tap check-off' '- Streak counters' '- Stats and a 30-day completion chart' '- Data saved locally in the browser \\(localStorage\\)' '' '## Roadmap' '- macOS notification nudges \\(reminders even when the app is closed\\)' '- Per-habit charts' '- Export/backup data')",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Add Better Habits MVP: daily tracking, streaks, stats chart *)"
+      "Bash(git commit -q -m 'Add Better Habits MVP: daily tracking, streaks, stats chart *)",
+      "Bash(node -e ' *)",
+      "Bash(chmod +x nudge/wind-down.sh)",
+      "Bash(open index.html)",
+      "Bash(git commit -q -m 'v0.2: editable names, per-habit history grid, export/import, docs, nudge system *)"
     ]
   }
 }
