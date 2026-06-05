@@ -6,6 +6,7 @@ install, no account, no server. Your data stays on your machine.
 👉 **New here?** Read [`TUTORIAL.md`](./TUTORIAL.md) for a feature walkthrough.
 
 ## Features
+- **Cross-device sync** — link your phone & laptop with a private sync code
 - One-tap daily check-off for each habit
 - Streak counters (🔥) per habit
 - Move between days to backfill or review history
@@ -42,6 +43,13 @@ open index.html
 
 ## Changelog
 All notable changes are tracked here, newest first.
+
+### v0.4 — 2026-06-05
+- **Added** cross-device sync via Supabase — set the same **sync code** on each
+  device and your habits stay in sync (near-live: polls while open + pulls on
+  focus). Edits merge safely: check-offs union, deletes/unchecks use timestamped
+  tombstones, latest rename wins. Works offline; localStorage stays the cache.
+- **Added** "⇅ Sync" button in the footer (shows status: off / syncing / synced)
 
 ### v0.3 — 2026-06-05
 - **Added** check-off timestamps — each completion records the time of day

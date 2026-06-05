@@ -66,6 +66,6 @@ Once you have an HTTPS URL:
 1. Open the URL in Chrome.
 2. **⋮ menu** → **Install app**.
 
-> Data is stored per-device. Your phone and laptop track habits **separately** —
-> use **Export/Import** in the app footer to move data between them. (Real-time
-> cross-device sync is on the backlog in `HANDOFF.md`.)
+> To keep your phone and laptop in sync, tap **⇅ Sync** in the footer and set the
+> same **sync code** on each device (see `TUTORIAL.md` §11). Without a sync code,
+> each device tracks habits separately — use **Export/Import** to move data once.

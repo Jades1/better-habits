@@ -162,6 +162,7 @@
   </div>
 
   <div class="footer">
+    <button class="ghost" id="syncBtn" title="Sync across your devices">⇅ Sync: off</button>
     <button class="ghost" id="exportBtn">⬇ Export backup</button>
     <button class="ghost" id="importBtn">⬆ Import backup</button>
     <input type="file" id="importFile" accept="application/json" style="display:none" />
@@ -173,11 +174,26 @@ const STORE_KEY = "betterHabits.v1";
 let state = load();
 let viewDate = todayStr();
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { habits: [] }; }
-  catch { return { habits: [] }; }
+// ensure a state object has the full shape (habits + sync tombstones)
+function normalize(s) {
+  s = s || {};
+  return {
+    habits: Array.isArray(s.habits) ? s.habits : [],
+    tombstones: {
+      habits: (s.tombstones && s.tombstones.habits) || {},  // habitId -> deletion ms
+      logs:   (s.tombstones && s.tombstones.logs)   || {}    // "habitId|date" -> uncheck ms
+    }
+  };
 }
-function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+function load() {
+  try { return normalize(JSON.parse(localStorage.getItem(STORE_KEY))); }
+  catch { return normalize(null); }
+}
+// write to localStorage only (no network)
+function saveLocal() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+// write locally AND push to the cloud if sync is on
+function save() { saveLocal(); schedulePush(); }
 
 function todayStr(d = new Date()) {
   return d.toISOString().slice(0, 10);
@@ -201,18 +217,20 @@ const expanded = new Set();   // ids of habits whose history grid is open
 function addHabit(name) {
   name = name.trim();
   if (!name) return;
-  state.habits.push({ id: uid(), name, log: {} });
+  // `created` gives a stable cross-device sort order; `nameTs` resolves rename conflicts
+  state.habits.push({ id: uid(), name, log: {}, created: Date.now(), nameTs: Date.now() });
   save(); render();
 }
 function deleteHabit(id) {
   state.habits = state.habits.filter(h => h.id !== id);
+  state.tombstones.habits[id] = Date.now();   // tombstone so the delete syncs to other devices
   expanded.delete(id);
   save(); render();
 }
 function renameHabit(id, name) {
   const h = state.habits.find(x => x.id === id);
   name = (name || "").trim();
-  if (h && name) { h.name = name; save(); }
+  if (h && name) { h.name = name; h.nameTs = Date.now(); save(); }
   render();
 }
 function toggle(id, dateStr) {
@@ -220,8 +238,14 @@ function toggle(id, dateStr) {
   if (!h) return;
   // store the moment of check-off (ISO timestamp) so we get daily timing data.
   // legacy entries may be `true`; both are treated as "done".
-  if (h.log[dateStr]) delete h.log[dateStr];
-  else h.log[dateStr] = new Date().toISOString();
+  const key = id + "|" + dateStr;
+  if (h.log[dateStr]) {
+    delete h.log[dateStr];
+    state.tombstones.logs[key] = Date.now();    // record the uncheck so it syncs
+  } else {
+    h.log[dateStr] = new Date().toISOString();
+    delete state.tombstones.logs[key];          // a fresh check supersedes any old uncheck
+  }
   save(); render();
 }
 
@@ -431,7 +455,7 @@ document.getElementById("importFile").addEventListener("change", e => {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.habits)) throw new Error("Not a Better Habits backup");
       if (confirm("Replace your current data with this backup?")) {
-        state = data; save(); render();
+        state = normalize(data); save(); render();
       }
     } catch (err) { alert("Couldn't import: " + err.message); }
     e.target.value = "";
@@ -439,7 +463,171 @@ document.getElementById("importFile").addEventListener("change", e => {
   reader.readAsText(file);
 });
 
+/* ─────────────────────────── Cross-device sync ───────────────────────────
+   Data lives in a single Supabase row keyed by your private "sync code".
+   The anon key below is safe to ship in client code (it can only do what the
+   table's row-level-security policy allows). Devices reconcile by merging:
+   check-offs union together, deletes/unchecks travel as timestamped tombstones,
+   and the most recent rename wins. Near-live via short polling + pull-on-focus. */
+const SB_URL = "https://qpzydwdgreunlskqsxhy.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwenlkd2RncmV1bmxza3FzeGh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzE5OTcsImV4cCI6MjA5NjIwNzk5N30.OmkLySAanLSN8ckVU0JaqVlzPNc5TRE8Kt23nc2Is6s";
+const SYNC_KEY = "betterHabits.syncCode";
+
+let syncCode = localStorage.getItem(SYNC_KEY) || "";
+let syncStatus = "off";          // off | syncing | ok | error
+let lastCanon = canon(state);    // canonical snapshot we've reconciled to
+let pushTimer = null, pollTimer = null;
+
+// timestamp -> ms (handles ISO strings, numbers, legacy `true`/empty)
+function tsMs(v) {
+  if (v === true || v == null) return 0;
+  const m = +new Date(v);
+  return isNaN(m) ? 0 : m;
+}
+// pick the better of two log values for the same day (prefer real timestamp, earliest check-in)
+function pickLog(x, y) {
+  if (x === undefined) return y;
+  if (y === undefined) return x;
+  if (x === true) return y;
+  if (y === true) return x;
+  return tsMs(x) <= tsMs(y) ? x : y;
+}
+// deterministic order so every device agrees (prevents sync ping-pong)
+function orderHabits(hs) {
+  return hs.slice().sort((a, b) =>
+    (a.created || 0) - (b.created || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+// canonical string form, used to detect "did anything actually change?"
+function canon(s) {
+  const n = normalize(s);
+  const sortDeep = v => Array.isArray(v) ? v.map(sortDeep)
+    : (v && typeof v === "object")
+      ? Object.keys(v).sort().reduce((o, k) => (o[k] = sortDeep(v[k]), o), {})
+      : v;
+  n.habits = orderHabits(n.habits);
+  return JSON.stringify(sortDeep(n));
+}
+
+// merge two states into one (commutative, idempotent — safe to run repeatedly)
+function mergeState(a, b) {
+  a = normalize(a); b = normalize(b);
+  const out = normalize(null);
+  const habTomb = out.tombstones.habits, logTomb = out.tombstones.logs;
+  for (const src of [a, b]) {
+    for (const [id, ts] of Object.entries(src.tombstones.habits))
+      habTomb[id] = Math.max(habTomb[id] || 0, tsMs(ts));
+    for (const [k, ts] of Object.entries(src.tombstones.logs))
+      logTomb[k] = Math.max(logTomb[k] || 0, tsMs(ts));
+  }
+  const byId = {}, order = [];
+  for (const src of [a, b]) {
+    for (const h of src.habits) {
+      if (!byId[h.id]) { byId[h.id] = { id: h.id, name: h.name, created: h.created || 0, nameTs: h.nameTs || 0, log: {} }; order.push(h.id); }
+      const cur = byId[h.id];
+      cur.created = Math.min(cur.created || Infinity, h.created || Infinity) || 0;
+      if ((h.nameTs || 0) >= cur.nameTs) { cur.name = h.name; cur.nameTs = h.nameTs || 0; }
+      for (const [date, val] of Object.entries(h.log || {})) cur.log[date] = pickLog(cur.log[date], val);
+    }
+  }
+  for (const id of order) {
+    if (habTomb[id]) continue;                       // habit was deleted — drop it, keep its tombstone
+    const h = byId[id];
+    for (const date of Object.keys(h.log)) {
+      const tomb = logTomb[id + "|" + date];
+      if (tomb && !(tsMs(h.log[date]) > tomb)) delete h.log[date];  // uncheck wins unless re-checked later
+    }
+    out.habits.push(h);
+  }
+  out.habits = orderHabits(out.habits);
+  return out;
+}
+
+function sbHeaders(extra) {
+  return Object.assign({ apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" }, extra || {});
+}
+function setSyncStatus(s) { syncStatus = s; updateSyncBtn(); }
+function onSyncErr(e) { console.warn("sync:", e && e.message || e); setSyncStatus("error"); }
+
+async function pullRemote() {
+  if (!syncCode) return;
+  const res = await fetch(`${SB_URL}/rest/v1/sync_state?code=eq.${encodeURIComponent(syncCode)}&select=data`, { headers: sbHeaders() });
+  if (!res.ok) throw new Error("pull " + res.status);
+  const rows = await res.json();
+  reconcile(rows[0] ? rows[0].data : normalize(null));
+  if (syncStatus !== "syncing") setSyncStatus("ok");
+}
+
+// fold a remote snapshot into local state; push back if we hold data it lacks
+function reconcile(remote) {
+  const merged = mergeState(state, remote);
+  const mergedCanon = canon(merged);
+  if (mergedCanon !== lastCanon) {                 // local view changed → adopt + redraw
+    state = merged; saveLocal(); render();
+  }
+  lastCanon = mergedCanon;
+  if (mergedCanon !== canon(remote)) pushRemote();  // remote is missing some of our data → upload
+}
+
+async function pushRemote() {
+  if (!syncCode) return;
+  clearTimeout(pushTimer); pushTimer = null;
+  setSyncStatus("syncing");
+  const body = [{ code: syncCode, data: normalize(state), updated_at: new Date().toISOString() }];
+  const res = await fetch(`${SB_URL}/rest/v1/sync_state`, {
+    method: "POST",
+    headers: sbHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error("push " + res.status);
+  lastCanon = canon(state);
+  setSyncStatus("ok");
+}
+
+// debounced push triggered by every local edit (via save())
+function schedulePush() {
+  if (!syncCode) return;
+  setSyncStatus("syncing");
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => pushRemote().catch(onSyncErr), 700);
+}
+
+function startSync() {
+  clearInterval(pollTimer);
+  if (!syncCode) { setSyncStatus("off"); return; }
+  setSyncStatus("syncing");
+  pullRemote().catch(onSyncErr);
+  // poll only while the tab is visible, to keep it near-live without draining battery
+  pollTimer = setInterval(() => { if (document.visibilityState === "visible") pullRemote().catch(onSyncErr); }, 8000);
+}
+
+function updateSyncBtn() {
+  const btn = document.getElementById("syncBtn");
+  const label = !syncCode ? "⇅ Sync: off"
+    : { syncing: "⇅ Syncing…", ok: "⇅ Synced ✓", error: "⚠ Sync error" }[syncStatus] || "⇅ Sync";
+  btn.textContent = label;
+  btn.style.color = syncStatus === "error" ? "var(--warn)" : (syncCode && syncStatus === "ok") ? "var(--good)" : "";
+  btn.title = syncCode ? `Sync is ON (code set). Tap to change or turn off.` : "Tap to link this device to your others";
+}
+
+document.getElementById("syncBtn").onclick = () => {
+  const entered = prompt(
+    "Sync code\n\nEnter the SAME secret code on every device to keep them in sync.\nLeave blank to turn sync off on this device.",
+    syncCode);
+  if (entered === null) return;                    // cancelled
+  const code = entered.trim();
+  if (code === syncCode) { if (code) startSync(); return; }
+  syncCode = code;
+  if (code) { localStorage.setItem(SYNC_KEY, code); startSync(); }
+  else { localStorage.removeItem(SYNC_KEY); clearInterval(pollTimer); setSyncStatus("off"); }
+};
+
+// pull promptly when you come back to the app (near-instant cross-device feel)
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && syncCode) pullRemote().catch(() => {}); });
+window.addEventListener("focus", () => { if (syncCode) pullRemote().catch(() => {}); });
+
 render();
+updateSyncBtn();
+startSync();
 
 // register service worker for offline / installable app (no-op on file://)
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

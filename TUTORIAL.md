@@ -69,8 +69,33 @@ and work offline once hosted over HTTPS. See `DEPLOY.md` for hosting the site, t
 1. Open the URL in Chrome.
 2. Tap the **⋮ menu** → **Install app** (or **Add to Home screen**).
 
-Your data is stored per-device in the browser, so your phone and laptop keep
-**separate** habit logs. Use **Export/Import** to move data between them.
+By default each device keeps its own habit log. To link them, set up sync below.
+
+---
+
+## 11. Syncing across your devices
+The **⇅ Sync** button (footer) keeps your phone and laptop in sync.
+
+1. On the first device, tap **⇅ Sync** and type a **sync code** — any secret
+   phrase you'll remember (e.g. `purple-otter-3712`). The button turns green
+   (**⇅ Synced ✓**).
+2. On every other device, tap **⇅ Sync** and enter the **exact same code**.
+3. That's it. Check off a habit on your phone and it shows up on your laptop
+   within a few seconds (it syncs while the app is open, and instantly when you
+   switch back to it).
+
+How it behaves:
+- **Edits merge intelligently** — a check-off on either device counts, and
+  deleting a habit or unchecking a day syncs too. You won't lose data if both
+  devices were edited.
+- **It still works offline** — changes upload next time you're connected.
+- **Turn it off** anytime: tap **⇅ Sync** and leave the code blank.
+- **Sharing the app?** Give a tester a *different* code and they get the same
+  app with completely separate data.
+
+> Your sync code is the only thing protecting your data, so pick something not
+> trivially guessable. Habit names + checkmarks aren't sensitive, so a simple
+> memorable phrase is fine.
 
 ---
 
