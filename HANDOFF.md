@@ -67,7 +67,8 @@ Working features:
 - Stats card: today %, best streak, last-30-days %, **avg check-in time**, 30-day chart
 - **Cross-device sync** via a private sync code (see "Cross-device sync" above)
 - **Reminders** — interval or time-of-day nudges with custom messages; in-app
-  banner + WebAudio chime; tap to toggle, press-and-hold to edit; synced (v0.6)
+  banner + WebAudio chime + optional system notifications; tap to toggle,
+  press-and-hold to edit; synced (v0.6)
 - **Shut down this Mac from the app** + nightly auto-shutdown (see "Wind-down" below)
 - Export / Import JSON backup
 - Installable PWA (offline-capable) — see `DEPLOY.md` for hosting
@@ -89,8 +90,19 @@ Working features:
   (avoids a stale fire when you open the app hours later).
 - **Alert:** in-app banner (`#reminderToast`, auto-hides after 12s) + a soft
   two-note WebAudio chime (no audio asset). Audio is unlocked on first
-  `pointerdown` (browser gesture requirement, esp. iOS). Known limitation:
-  only fires while the app is open — documented for the user.
+  `pointerdown` (browser gesture requirement, esp. iOS).
+- **System notifications (optional layer):** `systemNotify()` raises an OS
+  notification via `serviceWorker.ready.showNotification()` (falls back to
+  `new Notification`). Fired from `fireReminder()` **only when**
+  `document.visibilityState !== "visible"` (foreground already has banner+chime,
+  so no double alert). Permission is opt-in via the `#notifyRow` "Enable
+  notifications" button (`renderNotifyRow()` reflects granted/denied/default/
+  unsupported); permission is per-device, not synced. `sw.js` has a
+  `notificationclick` handler that focuses an existing window or opens one.
+  Known limitation (documented for the user): nothing fires when the app is
+  *fully closed* (no Web Push backend); background desktop tabs still tick
+  (throttled ~1/min) and notify. On iOS, notifications need the PWA installed
+  to the Home Screen + permission.
 - **UI:** `#remindersCard`; rows render in `renderReminders()` (called from
   `render()` so sync updates redraw them). **Tap** a row = toggle enabled;
   **press & hold** (550ms, movement >10px cancels) = open the editor modal

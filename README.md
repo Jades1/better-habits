@@ -53,8 +53,13 @@ All notable changes are tracked here, newest first.
   interval (e.g. every 30 min) or at a specific time of day, each with your own
   message. When due, the app shows an in-app banner and plays a soft chime.
   Tap a reminder to turn it on/off; **press & hold** to edit it (iPhone-style).
-  Reminders sync across your devices on the same sync code. They fire while the
-  app is open (a web app can't reliably alert when fully closed, esp. on iOS).
+  Reminders sync across your devices on the same sync code.
+- **Added** optional **system notifications** for reminders (one-tap to enable) —
+  raised when a reminder is due and the app isn't in front, so you're alerted
+  when it's backgrounded; clicking the notification refocuses the app. The in-app
+  banner + chime cover the foreground. Reminders fire while the app is open
+  (foreground or background); a web app can't reliably alert when fully closed,
+  especially on iOS. (Service worker handles the notification click.)
 
 ### v0.5 — 2026-06-05
 - **Added** "Wind-down · this Mac" card — shut the Mac down from the app and set a

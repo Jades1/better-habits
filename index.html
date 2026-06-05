@@ -207,8 +207,9 @@
       <button class="primary" id="addReminderBtn" style="flex:1">＋ Add reminder</button>
     </div>
     <div class="grid-caption" style="margin-top:10px">
-      Tap to turn on/off · press &amp; hold to edit. Reminders chime while the app is open.
+      Tap to turn on/off · press &amp; hold to edit.
     </div>
+    <div class="grid-caption" id="notifyRow" style="margin-top:8px"></div>
   </div>
 
   <div class="card" id="windDownCard" style="display:none">
@@ -941,6 +942,47 @@ function fireReminder(r) {
   toastTimer = setTimeout(() => { toast.style.display = "none"; }, 12000);
   chime();
   if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
+  // Also raise a system notification, but only when the app isn't the window
+  // you're looking at (the banner+chime already cover the foreground case).
+  if (document.visibilityState !== "visible") systemNotify(r.message);
+}
+
+// ── system (OS-level) notifications: a layer on top of the in-app banner ──
+// Lets a reminder reach you when the app is backgrounded (works best on desktop;
+// on iOS the app must be installed to the Home Screen and still open in the bg).
+function notifyState() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
+function systemNotify(msg) {
+  if (notifyState() !== "granted") return;
+  const opts = { body: msg, tag: "better-habits-reminder", renotify: true, icon: "icons/icon-192.png", badge: "icons/icon-192.png" };
+  // prefer the service worker (required on Android, more reliable); fall back to a page notification
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready
+      .then(reg => reg.showNotification("🌱 Better Habits", opts))
+      .catch(() => { try { new Notification("🌱 Better Habits", opts); } catch {} });
+  } else {
+    try { new Notification("🌱 Better Habits", opts); } catch {}
+  }
+}
+function renderNotifyRow() {
+  const el = document.getElementById("notifyRow");
+  if (!el) return;
+  const st = notifyState();
+  el.style.color = "";
+  if (st === "unsupported") { el.textContent = "This browser doesn't support system notifications — the in-app banner + chime still work."; return; }
+  if (st === "granted") {
+    el.innerHTML = "🔔 System notifications are on — you'll get an alert even when the app isn't in front (while it's still open in the background).";
+    el.style.color = "var(--good)";
+  } else if (st === "denied") {
+    el.innerHTML = "🔕 System notifications are blocked in your browser/OS settings. The in-app banner + chime still work; re-allow them in Settings to get background alerts.";
+  } else {
+    el.innerHTML = 'Want alerts when the app is in the background? <button class="ghost" id="notifyEnable" style="padding:4px 10px">Enable notifications</button>';
+    const b = document.getElementById("notifyEnable");
+    if (b) b.onclick = async () => {
+      try { await Notification.requestPermission(); } catch {}
+      renderNotifyRow();
+      if (notifyState() === "granted") { try { (await navigator.serviceWorker.ready).showNotification("🌱 Better Habits", { body: "Notifications enabled — you're all set.", icon: "icons/icon-192.png" }); } catch {} }
+    };
+  }
 }
 
 let audioCtx = null;
@@ -1089,6 +1131,7 @@ render();
 updateSyncBtn();
 startSync();
 refreshWindDown();
+renderNotifyRow();
 reminderTick();
 
 // register service worker for offline / installable app (no-op on file://)

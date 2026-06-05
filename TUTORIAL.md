@@ -92,13 +92,23 @@ Tap **Save**. When a reminder is due, a **banner slides in at the top** and a
   iPhone. Change the message, timing, or delete it.
 - Tap the **×** to delete.
 
+**System notifications (optional):** at the bottom of the Reminders card, tap
+**Enable notifications** to also get a real OS notification when a reminder is
+due *and the app isn't the window you're looking at*. While you're actively in
+the app you just get the in-app banner + chime (no double alert); when it's in
+the background, you get a system notification you can click to jump back in.
+
 Good to know:
-- Reminders **chime while the app is open**. A web app can't reliably alert you
-  when it's fully closed (especially on iPhone), so keep it open (or on screen)
-  for the nudge — or use a time-of-day reminder for around when you'll be in it.
+- Reminders fire **while the app is open** (foreground or background). A web app
+  can't reliably alert you when it's **fully closed** — especially on iPhone — so
+  for a closed-app nudge, leave it open in the background, or use a time-of-day
+  reminder for around when you'll be using it.
+- System notifications work best on **desktop**. On **iPhone** they require the
+  app to be **installed to your Home Screen** (see §10) and permission granted.
 - The **first tap anywhere** in the app unlocks sound (a browser rule), so the
   chime works from then on.
 - Reminders **sync across your devices** if you've set the same sync code.
+  (The notification permission itself is per-device — enable it on each.)
 
 ---
 
