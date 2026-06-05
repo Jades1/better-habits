@@ -99,6 +99,8 @@ Working features:
   notifications" button (`renderNotifyRow()` reflects granted/denied/default/
   unsupported); permission is per-device, not synced. `sw.js` has a
   `notificationclick` handler that focuses an existing window or opens one.
+  Time-of-day reminders are sticky (`requireInteraction:true` + unique tag so
+  they aren't replaced); interval ones auto-dismiss (shared tag, would pile up).
   Known limitation (documented for the user): nothing fires when the app is
   *fully closed* (no Web Push backend); background desktop tabs still tick
   (throttled ~1/min) and notify. On iOS, notifications need the PWA installed

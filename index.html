@@ -944,16 +944,21 @@ function fireReminder(r) {
   if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
   // Also raise a system notification, but only when the app isn't the window
   // you're looking at (the banner+chime already cover the foreground case).
-  if (document.visibilityState !== "visible") systemNotify(r.message);
+  // time-of-day reminders persist until dismissed; interval ones auto-dismiss
+  // (they recur often, so sticky ones would pile up).
+  if (document.visibilityState !== "visible") systemNotify(r.message, r.type === "time");
 }
 
 // ── system (OS-level) notifications: a layer on top of the in-app banner ──
 // Lets a reminder reach you when the app is backgrounded (works best on desktop;
 // on iOS the app must be installed to the Home Screen and still open in the bg).
 function notifyState() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
-function systemNotify(msg) {
+function systemNotify(msg, persist) {
   if (notifyState() !== "granted") return;
-  const opts = { body: msg, tag: "better-habits-reminder", renotify: true, icon: "icons/icon-192.png", badge: "icons/icon-192.png" };
+  // requireInteraction keeps it on screen until you dismiss it (desktop);
+  // a unique tag stops a sticky one from being replaced by the next reminder.
+  const opts = { body: msg, tag: persist ? "better-habits-" + Date.now() : "better-habits-reminder",
+    renotify: true, requireInteraction: !!persist, icon: "icons/icon-192.png", badge: "icons/icon-192.png" };
   // prefer the service worker (required on Android, more reliable); fall back to a page notification
   if (navigator.serviceWorker && navigator.serviceWorker.ready) {
     navigator.serviceWorker.ready

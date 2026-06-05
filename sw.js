@@ -1,6 +1,6 @@
 // Better Habits service worker — caches the app shell for offline use.
 // Bump CACHE when you change any cached file so clients fetch the new version.
-const CACHE = "better-habits-v7";
+const CACHE = "better-habits-v8";
 const ASSETS = [
   "./",
   "./index.html",

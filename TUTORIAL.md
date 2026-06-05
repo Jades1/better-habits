@@ -105,6 +105,9 @@ Good to know:
   reminder for around when you'll be using it.
 - System notifications work best on **desktop**. On **iPhone** they require the
   app to be **installed to your Home Screen** (see §10) and permission granted.
+- **Time-of-day** notifications **stay on screen until you dismiss them** (so you
+  don't miss the one daily nudge); **interval** notifications auto-dismiss, since
+  they keep coming and would otherwise pile up.
 - The **first tap anywhere** in the app unlocks sound (a browser rule), so the
   chime works from then on.
 - Reminders **sync across your devices** if you've set the same sync code.
