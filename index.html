@@ -167,6 +167,31 @@
   .seg-btn.active { border-color: var(--accent); color: var(--text); }
   .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 16px; color: var(--text); }
   .modal-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* Counters (tap buttons) */
+  .counter-row { display: flex; gap: 12px; }
+  .counter {
+    flex: 1; aspect-ratio: 1; min-width: 0;
+    border: none; border-radius: 16px; color: #fff; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px; font-family: inherit;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35); transition: transform 0.06s, filter 0.15s;
+  }
+  .counter:hover { filter: brightness(1.06); }
+  .counter:active { transform: scale(0.96); }
+  .counter-count { font-size: 34px; font-weight: 800; line-height: 1; }
+  .counter-label { font-size: 13px; font-weight: 600; text-align: center; line-height: 1.2; word-break: break-word; max-width: 100%; }
+  .counter-label.placeholder { font-weight: 500; opacity: 0.8; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+  .swatch { width: 34px; height: 34px; border-radius: 9px; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s; }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.sel { border-color: var(--text); transform: scale(1.08); }
+  .cnt-history { display: flex; gap: 6px; }
+  .cnt-day { flex: 1; text-align: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 2px; }
+  .cnt-day.today { border-color: var(--accent); }
+  .cnt-day .n { font-size: 16px; font-weight: 700; }
+  .cnt-day .d { font-size: 10px; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -198,6 +223,14 @@
       <div class="stat"><div class="num" id="statAvg">—</div><div class="lbl">Avg check-in</div></div>
     </div>
     <canvas id="chart" height="140"></canvas>
+  </div>
+
+  <div class="card" id="countersCard">
+    <h2>Counters</h2>
+    <div class="counter-row" id="counterRow"></div>
+    <div class="grid-caption" style="margin-top:10px">
+      Tap a button to count · press &amp; hold to set its label &amp; color · resets daily.
+    </div>
   </div>
 
   <div class="card" id="remindersCard">
@@ -281,6 +314,25 @@
   </div>
 </div>
 
+<div id="counterEditOverlay" class="overlay" style="display:none">
+  <div class="modal">
+    <h3>Button</h3>
+    <label class="fld">Label (shown on the button)
+      <input type="text" id="cntLabel" placeholder="e.g. Water · Pushups · Breathe" maxlength="24" />
+    </label>
+    <div class="fld" style="margin-bottom:8px">Color</div>
+    <div class="swatches" id="cntSwatches"></div>
+    <div class="fld" style="margin:16px 0 8px">Recent days</div>
+    <div class="cnt-history" id="cntHistory"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="ghost" id="cntReset">Reset count</button>
+      <span style="flex:1"></span>
+      <button class="ghost" id="cntCancel">Cancel</button>
+      <button class="primary" id="cntSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORE_KEY = "betterHabits.v1";
 let state = load();
@@ -292,12 +344,48 @@ function normalize(s) {
   return {
     habits: Array.isArray(s.habits) ? s.habits : [],
     reminders: Array.isArray(s.reminders) ? s.reminders : [],   // gentle nudges (interval or time-of-day)
+    counters: normalizeCounters(s.counters),                    // three tap counters (color + label + tally)
     tombstones: {
       habits:    (s.tombstones && s.tombstones.habits)    || {},  // habitId -> deletion ms
       logs:      (s.tombstones && s.tombstones.logs)      || {},  // "habitId|date" -> uncheck ms
       reminders: (s.tombstones && s.tombstones.reminders) || {}   // reminderId -> deletion ms
     }
   };
+}
+
+// Counters are a fixed set of three buttons (stable ids c1–c3 so they merge
+// cleanly across devices — no add/delete, just customize color/label/tally).
+const COUNTER_COLORS = ["#5b8cff", "#3ecf8e", "#c98cff", "#ff6b6b", "#ffb454", "#4dd0e1", "#f06292", "#9ccc65", "#8a90a0"];
+function defaultCounters() {
+  return [
+    { id: "c1", label: "", color: "#5b8cff", history: {}, updatedTs: 0 },
+    { id: "c2", label: "", color: "#3ecf8e", history: {}, updatedTs: 0 },
+    { id: "c3", label: "", color: "#c98cff", history: {}, updatedTs: 0 }
+  ];
+}
+// coerce stored data into exactly three counters in a stable order.
+// `history` maps "YYYY-MM-DD" -> presses that day, so the tally resets each day
+// but every day's total is kept (tracked like habit check-offs).
+function normalizeCounters(arr) {
+  const list = Array.isArray(arr) ? arr : [];
+  return defaultCounters().map(d => {
+    const f = list.find(c => c && c.id === d.id);
+    if (!f) return d;
+    const history = {};
+    if (f.history && typeof f.history === "object") {
+      for (const [k, v] of Object.entries(f.history))
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k) && Number.isFinite(v) && v > 0) history[k] = v;
+    } else if (typeof f.countDate === "string" && f.countDate && Number.isFinite(f.count) && f.count > 0) {
+      history[f.countDate] = f.count;   // migrate the earlier single-tally shape
+    }
+    return {
+      id: d.id,
+      label: typeof f.label === "string" ? f.label : "",
+      color: typeof f.color === "string" ? f.color : d.color,
+      history,
+      updatedTs: f.updatedTs || 0
+    };
+  });
 }
 
 function load() {
@@ -409,6 +497,7 @@ function bestStreakAll() {
 
 function render() {
   renderReminders();
+  renderCounters();
   document.getElementById("dateLabel").textContent = prettyDate(viewDate);
   const list = document.getElementById("habitList");
   list.innerHTML = "";
@@ -625,6 +714,7 @@ function canon(s) {
       : v;
   n.habits = orderHabits(n.habits);
   n.reminders = orderReminders(n.reminders);
+  n.counters = normalizeCounters(n.counters);   // already in fixed c1–c3 order
   return JSON.stringify(sortDeep(n));
 }
 
@@ -674,6 +764,22 @@ function mergeState(a, b) {
   }
   for (const id of rOrder) { if (remTomb[id]) continue; out.reminders.push(rById[id]); }
   out.reminders = orderReminders(out.reminders);
+
+  // counters: fixed set of three. Per-day history unions (max presses per day
+  // wins, so a tally survives across devices); label/color take the later
+  // updatedTs. Commutative + idempotent, like the habit-log merge.
+  out.counters = a.counters.map(ca => {
+    const cb = b.counters.find(x => x.id === ca.id) || ca;
+    const newer = (cb.updatedTs || 0) > (ca.updatedTs || 0) ? cb : ca;
+    const history = {};
+    for (const src of [ca, cb])
+      for (const [date, n] of Object.entries(src.history || {}))
+        history[date] = Math.max(history[date] || 0, n || 0);
+    return {
+      id: ca.id, label: newer.label, color: newer.color, history,
+      updatedTs: Math.max(ca.updatedTs || 0, cb.updatedTs || 0)
+    };
+  });
   return out;
 }
 
@@ -1019,6 +1125,7 @@ document.addEventListener("pointerdown", function unlockAudio() {
 function reminderTick() {
   const now = Date.now();
   const today = todayStr();
+  if (today !== counterDay) renderCounters();   // crossed midnight with the app open → reset the tallies shown
   for (const r of state.reminders) {
     if (!r.enabled || !r.message) continue;
     if (r.type === "interval") {
@@ -1126,6 +1233,134 @@ remListEl.addEventListener("pointerup", e => {
 });
 remListEl.addEventListener("pointercancel", cancelLP);
 remListEl.addEventListener("contextmenu", e => e.preventDefault());   // suppress long-press context menu
+
+/* ───────────────────────────── Counters ─────────────────────────────
+   Three square tap-buttons. Each has a color + a label superimposed on it,
+   and a running tally that bumps on every press. Tap = +1; press & hold =
+   edit its label/color (and reset the count). They sync across devices
+   (merged like reminders: latest write wins the whole button). */
+// today's tally comes straight from the per-day history (so it resets each day)
+function counterToday(c) { return (c.history && c.history[todayStr()]) || 0; }
+let counterDay = todayStr();   // track day boundary so an open app rolls over at midnight
+
+function renderCounters() {
+  counterDay = todayStr();
+  const row = document.getElementById("counterRow");
+  if (!row) return;
+  row.innerHTML = "";
+  for (const c of state.counters) {
+    const btn = document.createElement("button");
+    btn.className = "counter";
+    btn.dataset.id = c.id;
+    btn.style.background = c.color;
+    btn.innerHTML = '<div class="counter-count"></div><div class="counter-label"></div>';
+    btn.querySelector(".counter-count").textContent = counterToday(c);
+    const lbl = btn.querySelector(".counter-label");
+    if (c.label) { lbl.textContent = c.label; }
+    else { lbl.textContent = "Hold to set"; lbl.classList.add("placeholder"); }
+    row.appendChild(btn);
+  }
+}
+
+function bumpCounter(id) {
+  const c = state.counters.find(x => x.id === id);
+  if (!c) return;
+  const today = todayStr();
+  if (!c.history) c.history = {};
+  c.history[today] = (c.history[today] || 0) + 1;   // record this press under today (kept as history)
+  c.updatedTs = Date.now();
+  save();
+  // update just this button's number for a snappy feel (avoid a full re-render / chart redraw)
+  const el = document.querySelector('.counter[data-id="' + id + '"] .counter-count');
+  if (el) el.textContent = c.history[today];
+}
+
+// ── counter editor modal ──
+let editingCounterId = null, cntPickColor = null;
+function renderSwatches() {
+  const wrap = document.getElementById("cntSwatches");
+  wrap.innerHTML = "";
+  for (const col of COUNTER_COLORS) {
+    const s = document.createElement("div");
+    s.className = "swatch" + (col === cntPickColor ? " sel" : "");
+    s.style.background = col;
+    s.dataset.color = col;
+    wrap.appendChild(s);
+  }
+}
+// the last 7 days of this counter's tracked tallies (today highlighted)
+function renderCounterHistory(c) {
+  const el = document.getElementById("cntHistory");
+  const today = todayStr();
+  let cells = "";
+  for (let i = 6; i >= 0; i--) {
+    const dStr = shiftDate(today, -i);
+    const n = (c.history && c.history[dStr]) || 0;
+    const wd = new Date(dStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2);
+    cells += '<div class="cnt-day' + (dStr === today ? " today" : "") + '"><div class="n">' + n + '</div><div class="d">' + wd + '</div></div>';
+  }
+  el.innerHTML = cells;
+}
+function openCounterEditor(id) {
+  const c = state.counters.find(x => x.id === id);
+  if (!c) return;
+  editingCounterId = id;
+  cntPickColor = c.color;
+  document.getElementById("cntLabel").value = c.label || "";
+  renderSwatches();
+  renderCounterHistory(c);
+  document.getElementById("counterEditOverlay").style.display = "";
+  setTimeout(() => document.getElementById("cntLabel").focus(), 50);
+}
+function closeCounterEditor() { document.getElementById("counterEditOverlay").style.display = "none"; editingCounterId = null; }
+
+document.getElementById("cntSwatches").onclick = e => {
+  const sw = e.target.closest(".swatch");
+  if (!sw) return;
+  cntPickColor = sw.dataset.color;
+  renderSwatches();
+};
+document.getElementById("cntCancel").onclick = closeCounterEditor;
+document.getElementById("counterEditOverlay").onclick = e => { if (e.target.id === "counterEditOverlay") closeCounterEditor(); };
+document.getElementById("cntReset").onclick = () => {
+  if (!editingCounterId) return;
+  if (!confirm("Reset today's count to 0? (Past days are kept.)")) return;
+  const c = state.counters.find(x => x.id === editingCounterId);
+  if (c) { if (!c.history) c.history = {}; delete c.history[todayStr()]; c.updatedTs = Date.now(); save(); render(); }
+  closeCounterEditor();
+};
+document.getElementById("cntSave").onclick = () => {
+  const c = state.counters.find(x => x.id === editingCounterId);
+  if (c) {
+    c.label = document.getElementById("cntLabel").value.trim();
+    c.color = cntPickColor || c.color;
+    c.updatedTs = Date.now();
+    save(); render();
+  }
+  closeCounterEditor();
+};
+
+// ── row interaction: tap = +1, press-and-hold = edit (iPhone-style) ──
+const cntRowEl = document.getElementById("counterRow");
+let cLpTimer = null, cLpFired = false, cLpX = 0, cLpY = 0;
+function cCancelLP() { clearTimeout(cLpTimer); cLpTimer = null; }
+cntRowEl.addEventListener("pointerdown", e => {
+  const btn = e.target.closest(".counter");
+  if (!btn) return;
+  cLpFired = false; cLpX = e.clientX; cLpY = e.clientY;
+  const id = btn.dataset.id;
+  cLpTimer = setTimeout(() => { cLpFired = true; openCounterEditor(id); if (navigator.vibrate) try { navigator.vibrate(15); } catch {} }, 550);
+});
+cntRowEl.addEventListener("pointermove", e => {
+  if (cLpTimer && (Math.abs(e.clientX - cLpX) > 10 || Math.abs(e.clientY - cLpY) > 10)) cCancelLP();   // a scroll, not a hold
+});
+cntRowEl.addEventListener("pointerup", e => {
+  const btn = e.target.closest(".counter");
+  cCancelLP();
+  if (btn && !cLpFired) { bumpCounter(btn.dataset.id); if (navigator.vibrate) try { navigator.vibrate(8); } catch {} }
+});
+cntRowEl.addEventListener("pointercancel", cCancelLP);
+cntRowEl.addEventListener("contextmenu", e => e.preventDefault());   // suppress long-press context menu
 
 setInterval(reminderTick, 15000);
 // catch up promptly when you return to the app

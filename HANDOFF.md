@@ -28,6 +28,8 @@ nudge + auto-shutdown to support that goal directly.
     habits: [ { id, name, created, nameTs, log: { "YYYY-MM-DD": "<ISO ts>", ... } } ],
     reminders: [ { id, message, type:"interval"|"time", intervalMin, time:"HH:MM",
                    enabled, created, updatedTs } ],   // gentle nudges (v0.6)
+    counters: [ { id:"c1".."c3", label, color, history:{ "YYYY-MM-DD": count },
+                  updatedTs } ],                       // 3 daily tap counters (v0.7)
     tombstones: {
       habits:    { "<habitId>": <deletion ms> },          // deleted habits
       logs:      { "<habitId>|YYYY-MM-DD": <uncheck ms> }, // un-checked days
@@ -58,7 +60,7 @@ nudge + auto-shutdown to support that goal directly.
   per-device code stored under `betterHabits.syncCode`. Different codes = fully
   separate data (handy for sharing the app with a tester).
 
-## Current state (v0.6)
+## Current state (v0.7)
 Working features:
 - Add / edit / delete habits
 - Daily check-off + date navigation (‹ ›); records check-off time per day
@@ -69,6 +71,9 @@ Working features:
 - **Reminders** — interval or time-of-day nudges with custom messages; in-app
   banner + WebAudio chime + optional system notifications; tap to toggle,
   press-and-hold to edit; synced (v0.6)
+- **Counters** — three customizable tap buttons (color + label); tally resets
+  daily and each day's total is tracked; tap to count, press-and-hold to edit /
+  view last 7 days; synced (v0.7)
 - **Shut down this Mac from the app** + nightly auto-shutdown (see "Wind-down" below)
 - Export / Import JSON backup
 - Installable PWA (offline-capable) — see `DEPLOY.md` for hosting
@@ -111,6 +116,30 @@ Working features:
   (`#remEditOverlay`). `×` deletes. Editor handles new + edit, interval-vs-time
   segmented control, minutes/hours unit.
 
+## Counters (v0.7)
+- **Model:** `state.counters[]` is a **fixed set of three** buttons with stable
+  ids `c1`–`c3` (no add/delete — `normalizeCounters()` always coerces to exactly
+  three, in order, and migrates the brief earlier `count`/`countDate` shape into
+  `history`). Each has `label`, `color`, `updatedTs`, and `history` =
+  `{ "YYYY-MM-DD": presses }`.
+- **Daily reset + tracking:** the number shown is `counterToday(c)` =
+  `history[today]` (so it reads 0 on a new day). `bumpCounter()` does
+  `history[today]++` — every day's total persists as history. If the app is left
+  open across midnight, `reminderTick()` (15s) notices `today !== counterDay` and
+  re-renders so the tallies reset on screen.
+- **Merge:** in `mergeState()`, per counter id the `history` maps **union with
+  per-day max** (a tally survives across devices), while `label`/`color` take the
+  later `updatedTs`; `updatedTs` = max. Commutative + idempotent (verified).
+  Included in `canon()`. No tombstones (fixed set). Caveat: because history is
+  max-union, "Reset today" can be undone by another device still holding a higher
+  count for today — fine for single-user use.
+- **UI:** `#countersCard` → `#counterRow` (three `.counter` `<button>`s, colored
+  background, count + label superimposed; empty label shows "Hold to set").
+  **Tap** = +1 (updates just that button's number, no full re-render/chart redraw
+  via `save()` + direct DOM write); **press & hold** (550ms, >10px cancels) opens
+  `#counterEditOverlay` to set label, pick a color from `COUNTER_COLORS` swatches,
+  see the **last 7 days** (`renderCounterHistory()`), and **Reset today**.
+
 ## Wind-down: shut down the Mac from the app (v0.5)
 - **Why a helper:** a browser tab can't power off a computer (sandbox), so the
   "Wind-down · this Mac" card talks to a tiny local helper over `http://127.0.0.1:7421`.
@@ -138,6 +167,7 @@ Working features:
   a browser blocks it, open `http://localhost:7421` (served by the helper) instead.
 
 ## Recent changes
+- v0.7: Counters (3 customizable tap buttons, daily reset + per-day history, synced)
 - v0.6: Reminders (interval / time-of-day nudges, in-app banner + chime, synced)
 - v0.5: shut-down-from-app via local helper (`helper/`), Wind-down card
 - v0.4: cross-device sync (Supabase REST + merge/tombstones), footer sync button

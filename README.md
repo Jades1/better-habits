@@ -6,6 +6,8 @@ install, no account, no server. Your data stays on your machine.
 👉 **New here?** Read [`TUTORIAL.md`](./TUTORIAL.md) for a feature walkthrough.
 
 ## Features
+- **Tap counters** — three customizable square buttons (your own color + label)
+  that tally presses; the count resets each day and every day's total is tracked
 - **Custom reminders** — gentle nudges on a repeating interval or at a set time,
   with your own message (e.g. "Be kind to yourself"); chime + banner in-app
 - **Cross-device sync** — link your phone & laptop with a private sync code
@@ -47,6 +49,13 @@ open index.html
 
 ## Changelog
 All notable changes are tracked here, newest first.
+
+### v0.7 — 2026-06-05
+- **Added** a **Counters** card — three square buttons you can each give a color
+  and a label (superimposed on the button). Tap a button to count; the tally
+  **resets daily**, and each day's total is **tracked** (kept as history) — view
+  the last 7 days by **press & holding** the button, which is also where you set
+  its label/color and reset today's count. Counters sync across your devices.
 
 ### v0.6 — 2026-06-05
 - **Added** a **Reminders** card — create gentle nudges that fire on a repeating

@@ -115,7 +115,30 @@ Good to know:
 
 ---
 
-## 12. Syncing across your devices
+## 12. Counters (tap buttons)
+The **Counters** card has **three square buttons** you can make your own — handy
+for tallying anything through the day: glasses of water, pushups, deep breaths,
+times you stepped away from a screen.
+
+**Use one:** just **tap** the button — the big number counts up by one each press.
+
+**Customize it:** **press and hold** a button (iPhone-style) to open its editor,
+where you can:
+- **Label** it — your text shows on the button (e.g. *Water*).
+- **Color** it — pick from the swatches.
+- See **Recent days** — the last 7 days of tallies, today highlighted.
+- **Reset count** — set today back to 0 (past days are kept).
+
+Good to know:
+- **Resets daily** — each button starts at 0 every morning, so the number is
+  always "today so far."
+- **Every day is tracked** — your daily totals are saved as history (that's the
+  "Recent days" strip), so nothing is lost when it resets.
+- Counters **sync across your devices** on the same sync code.
+
+---
+
+## 13. Syncing across your devices
 The **⇅ Sync** button (footer) keeps your phone and laptop in sync.
 
 1. On the first device, tap **⇅ Sync** and type a **sync code** — any secret
@@ -141,7 +164,7 @@ How it behaves:
 
 ---
 
-## 13. Shutting your Mac down from the app
+## 14. Shutting your Mac down from the app
 The **Wind-down · this Mac** card lets you power this Mac off from the app — both
 a **⏻ Shut down now** button and a **nightly auto-shutdown** time.
 
