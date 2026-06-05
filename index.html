@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Better Habits</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --line: #2a2f3a;
+    --text: #e7e9ee;
+    --muted: #8a90a0;
+    --accent: #5b8cff;
+    --good: #3ecf8e;
+    --warn: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 24px 20px 8px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px 20px 80px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 12px; }
+  .habit {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--panel-2);
+    margin-bottom: 8px;
+    transition: background 0.15s;
+  }
+  .habit:last-child { margin-bottom: 0; }
+  .check {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    border: 2px solid var(--line);
+    flex-shrink: 0;
+    cursor: pointer;
+    display: grid; place-items: center;
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .check.done { background: var(--good); border-color: var(--good); }
+  .check.done::after { content: "✓"; color: #07120c; font-weight: 700; font-size: 16px; }
+  .habit-name { flex: 1; font-size: 16px; }
+  .habit-name.done { color: var(--muted); text-decoration: line-through; }
+  .streak { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .streak b { color: var(--accent); }
+  .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 6px; }
+  .del:hover { color: var(--warn); background: rgba(255,107,107,0.1); }
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  input[type=text] {
+    flex: 1;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat {
+    flex: 1; min-width: 120px;
+    background: var(--panel-2);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  canvas { margin-top: 8px; }
+  .date-nav { display: flex; align-items: center; gap: 12px; }
+  .date-nav button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; }
+  .date-nav .label { flex: 1; text-align: center; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌱 Better Habits</h1>
+  <div class="sub">One day at a time.</div>
+</header>
+<main>
+  <div class="card">
+    <h2>Daily Check-in</h2>
+    <div class="date-nav">
+      <button id="prevDay">‹</button>
+      <div class="label" id="dateLabel"></div>
+      <button id="nextDay">›</button>
+    </div>
+    <div id="habitList" style="margin-top:12px"></div>
+    <div class="add-row">
+      <input type="text" id="newHabit" placeholder="Add a habit (e.g. Screens off by 10:30)" />
+      <button class="primary" id="addBtn">Add</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Stats</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="statToday">0%</div><div class="lbl">Today done</div></div>
+      <div class="stat"><div class="num" id="statBest">0</div><div class="lbl">Best streak</div></div>
+      <div class="stat"><div class="num" id="stat30">0%</div><div class="lbl">Last 30 days</div></div>
+    </div>
+    <canvas id="chart" height="140"></canvas>
+  </div>
+</main>
+
+<script>
+const STORE_KEY = "betterHabits.v1";
+let state = load();
+let viewDate = todayStr();
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { habits: [] }; }
+  catch { return { habits: [] }; }
+}
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+function todayStr(d = new Date()) {
+  return d.toISOString().slice(0, 10);
+}
+function shiftDate(str, days) {
+  const d = new Date(str + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return todayStr(d);
+}
+function prettyDate(str) {
+  const d = new Date(str + "T00:00:00");
+  if (str === todayStr()) return "Today";
+  if (str === shiftDate(todayStr(), -1)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function addHabit(name) {
+  name = name.trim();
+  if (!name) return;
+  state.habits.push({ id: uid(), name, log: {} });
+  save(); render();
+}
+function deleteHabit(id) {
+  state.habits = state.habits.filter(h => h.id !== id);
+  save(); render();
+}
+function toggle(id, dateStr) {
+  const h = state.habits.find(x => x.id === id);
+  if (!h) return;
+  h.log[dateStr] = !h.log[dateStr];
+  if (!h.log[dateStr]) delete h.log[dateStr];
+  save(); render();
+}
+
+// current streak ending at viewDate (counts consecutive done days up to that date)
+function currentStreak(h, endStr) {
+  let count = 0, cur = endStr;
+  while (h.log[cur]) { count++; cur = shiftDate(cur, -1); }
+  return count;
+}
+function bestStreakAll() {
+  let best = 0;
+  for (const h of state.habits) {
+    const days = Object.keys(h.log).sort();
+    let run = 0, prev = null;
+    for (const d of days) {
+      if (prev && shiftDate(prev, 1) === d) run++; else run = 1;
+      best = Math.max(best, run);
+      prev = d;
+    }
+  }
+  return best;
+}
+
+function render() {
+  document.getElementById("dateLabel").textContent = prettyDate(viewDate);
+  const list = document.getElementById("habitList");
+  list.innerHTML = "";
+  if (state.habits.length === 0) {
+    list.innerHTML = '<div class="empty">No habits yet. Add one below to get started.</div>';
+  }
+  for (const h of state.habits) {
+    const done = !!h.log[viewDate];
+    const streak = currentStreak(h, viewDate);
+    const row = document.createElement("div");
+    row.className = "habit";
+    row.innerHTML = `
+      <div class="check ${done ? "done" : ""}" data-id="${h.id}"></div>
+      <div class="habit-name ${done ? "done" : ""}">${escapeHtml(h.name)}</div>
+      <div class="streak">${streak > 0 ? `🔥 <b>${streak}</b>` : ""}</div>
+      <button class="del" data-del="${h.id}" title="Delete">×</button>
+    `;
+    list.appendChild(row);
+  }
+  renderStats();
+}
+
+function renderStats() {
+  const today = todayStr();
+  const n = state.habits.length;
+  const doneToday = state.habits.filter(h => h.log[today]).length;
+  document.getElementById("statToday").textContent = n ? Math.round(100 * doneToday / n) + "%" : "0%";
+  document.getElementById("statBest").textContent = bestStreakAll();
+
+  // last 30 days completion rate + chart data
+  const labels = [], data = [];
+  let totalPossible = 0, totalDone = 0;
+  for (let i = 29; i >= 0; i--) {
+    const d = shiftDate(today, -i);
+    const done = state.habits.filter(h => h.log[d]).length;
+    const pct = n ? Math.round(100 * done / n) : 0;
+    labels.push(new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "numeric", day: "numeric" }));
+    data.push(pct);
+    totalPossible += n; totalDone += done;
+  }
+  document.getElementById("stat30").textContent = totalPossible ? Math.round(100 * totalDone / totalPossible) + "%" : "0%";
+  drawChart(labels, data);
+}
+
+let chart;
+function drawChart(labels, data) {
+  const ctx = document.getElementById("chart");
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: "#5b8cff", borderRadius: 4, maxBarThickness: 14 }] },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + "% done" } } },
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { color: "#8a90a0", callback: v => v + "%" }, grid: { color: "#2a2f3a" } },
+        x: { ticks: { color: "#8a90a0", maxTicksLimit: 8 }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// events
+document.getElementById("addBtn").onclick = () => {
+  const inp = document.getElementById("newHabit");
+  addHabit(inp.value); inp.value = ""; inp.focus();
+};
+document.getElementById("newHabit").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("addBtn").click();
+});
+document.getElementById("prevDay").onclick = () => { viewDate = shiftDate(viewDate, -1); render(); };
+document.getElementById("nextDay").onclick = () => {
+  if (viewDate < todayStr()) { viewDate = shiftDate(viewDate, 1); render(); }
+};
+document.getElementById("habitList").addEventListener("click", e => {
+  const check = e.target.closest(".check");
+  if (check) return toggle(check.dataset.id, viewDate);
+  const del = e.target.closest(".del");
+  if (del && confirm("Delete this habit and its history?")) deleteHabit(del.dataset.del);
+});
+
+render();
+</script>
+</body>
+</html>
