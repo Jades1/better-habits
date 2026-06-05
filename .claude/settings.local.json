@@ -9,7 +9,10 @@
       "Bash(node -e ' *)",
       "Bash(chmod +x nudge/wind-down.sh)",
       "Bash(open index.html)",
-      "Bash(git commit -q -m 'v0.2: editable names, per-habit history grid, export/import, docs, nudge system *)"
+      "Bash(git commit -q -m 'v0.2: editable names, per-habit history grid, export/import, docs, nudge system *)",
+      "Bash(mkdir -p icons)",
+      "Bash(python3 -)",
+      "Bash(git commit -q -m 'v0.3: PWA + phone install, check-off timestamps, avg check-in stat *)"
     ]
   }
 }

@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Better Habits</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Habits" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<script src="vendor/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -68,6 +74,7 @@
   .habit-name.done { color: var(--muted); text-decoration: line-through; }
   .streak { font-size: 13px; color: var(--muted); white-space: nowrap; }
   .streak b { color: var(--accent); }
+  .streak .at { color: var(--good); }
   .iconbtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 6px; line-height: 1; }
   .iconbtn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
   .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 6px; }
@@ -149,6 +156,7 @@
       <div class="stat"><div class="num" id="statToday">0%</div><div class="lbl">Today done</div></div>
       <div class="stat"><div class="num" id="statBest">0</div><div class="lbl">Best streak</div></div>
       <div class="stat"><div class="num" id="stat30">0%</div><div class="lbl">Last 30 days</div></div>
+      <div class="stat"><div class="num" id="statAvg">—</div><div class="lbl">Avg check-in</div></div>
     </div>
     <canvas id="chart" height="140"></canvas>
   </div>
@@ -210,9 +218,35 @@ function renameHabit(id, name) {
 function toggle(id, dateStr) {
   const h = state.habits.find(x => x.id === id);
   if (!h) return;
-  h.log[dateStr] = !h.log[dateStr];
-  if (!h.log[dateStr]) delete h.log[dateStr];
+  // store the moment of check-off (ISO timestamp) so we get daily timing data.
+  // legacy entries may be `true`; both are treated as "done".
+  if (h.log[dateStr]) delete h.log[dateStr];
+  else h.log[dateStr] = new Date().toISOString();
   save(); render();
+}
+
+// format a log value's time-of-day, e.g. "10:14 PM"; null for legacy/empty
+function checkTime(val) {
+  if (!val || val === true) return null;
+  const d = new Date(val);
+  return isNaN(d) ? null : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// average check-in time-of-day across all timestamped entries, as "h:mm AM/PM"
+function avgCheckInTime() {
+  let sum = 0, count = 0;
+  for (const h of state.habits) {
+    for (const v of Object.values(h.log)) {
+      if (v && v !== true) {
+        const d = new Date(v);
+        if (!isNaN(d)) { sum += d.getHours() * 60 + d.getMinutes(); count++; }
+      }
+    }
+  }
+  if (!count) return "—";
+  const avg = Math.round(sum / count);
+  const dd = new Date(); dd.setHours(Math.floor(avg / 60), avg % 60, 0, 0);
+  return dd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 // current streak ending at viewDate (counts consecutive done days up to that date)
@@ -246,12 +280,13 @@ function render() {
     const done = !!h.log[viewDate];
     const streak = currentStreak(h, viewDate);
     const isOpen = expanded.has(h.id);
+    const time = checkTime(h.log[viewDate]);
     const row = document.createElement("div");
     row.className = "habit";
     row.innerHTML = `
       <div class="check ${done ? "done" : ""}" data-id="${h.id}"></div>
       <div class="habit-name ${done ? "done" : ""}">${escapeHtml(h.name)}</div>
-      <div class="streak">${streak > 0 ? `🔥 <b>${streak}</b>` : ""}</div>
+      <div class="streak">${time ? `<span class="at">✓ ${time}</span> ` : ""}${streak > 0 ? `🔥 <b>${streak}</b>` : ""}</div>
       <button class="iconbtn" data-edit="${h.id}" title="Rename">✎</button>
       <button class="iconbtn" data-expand="${h.id}" title="History">${isOpen ? "▾" : "▸"}</button>
       <button class="del" data-del="${h.id}" title="Delete">×</button>
@@ -271,7 +306,8 @@ function renderDetail(h) {
   for (let i = 27; i >= 0; i--) {
     const d = shiftDate(today, -i);
     const on = h.log[d] ? "on" : "";
-    cells += `<div class="cell ${on}" data-cell="${h.id}" data-date="${d}" title="${d}"></div>`;
+    const t = checkTime(h.log[d]);
+    cells += `<div class="cell ${on}" data-cell="${h.id}" data-date="${d}" title="${d}${t ? " · " + t : ""}"></div>`;
   }
   wrap.innerHTML = `<div class="grid-caption">Last 28 days — click to toggle</div><div class="grid">${cells}</div>`;
   return wrap;
@@ -296,6 +332,7 @@ function renderStats() {
     totalPossible += n; totalDone += done;
   }
   document.getElementById("stat30").textContent = totalPossible ? Math.round(100 * totalDone / totalPossible) + "%" : "0%";
+  document.getElementById("statAvg").textContent = avgCheckInTime();
   drawChart(labels, data);
 }
 
@@ -403,6 +440,11 @@ document.getElementById("importFile").addEventListener("change", e => {
 });
 
 render();
+
+// register service worker for offline / installable app (no-op on file://)
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 </script>
 </body>
 </html>
